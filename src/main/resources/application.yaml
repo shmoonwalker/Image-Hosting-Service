@@ -1,3 +1,13 @@
 spring:
   application:
     name: Image-Hosting-Service
+
+  datasource:
+      url: ${DB_URL}
+      username: ${DB_USER}
+      password: ${DB_PASSWORD}
+
+
+  session:
+    jdbc:
+      initialize-schema: always
