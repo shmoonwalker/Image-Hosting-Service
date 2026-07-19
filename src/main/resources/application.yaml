@@ -2,12 +2,26 @@ spring:
   application:
     name: Image-Hosting-Service
 
+  servlet:
+    multipart:
+      max-file-size: 10MB
+      max-request-size: 11MB
+
   datasource:
-      url: ${DB_URL}
-      username: ${DB_USER}
-      password: ${DB_PASSWORD}
+    url: ${DB_URL}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
 
 
   session:
     jdbc:
       initialize-schema: always
+
+
+object-storage:
+
+  endpoint: ${OBJECT_STORAGE_ENDPOINT}
+  region: ${OBJECT_STORAGE_REGION:auto}
+  access-key-id: ${OBJECT_STORAGE_ACCESS_KEY_ID}
+  secret-access-key: ${OBJECT_STORAGE_SECRET_ACCESS_KEY}
+  bucket: ${OBJECT_STORAGE_BUCKET}
