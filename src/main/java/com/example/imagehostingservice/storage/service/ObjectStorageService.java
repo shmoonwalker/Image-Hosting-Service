@@ -6,9 +6,11 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
+import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.util.UUID;
 
@@ -32,9 +34,8 @@ public class ObjectStorageService {
         try {
             s3Client.putObject(
                     request,
-                    RequestBody.fromInputStream(
-                            file.getInputStream(),
-                            file.getSize()
+                    RequestBody.fromBytes(
+                            file.getBytes()
                     )
             );
 
@@ -45,5 +46,13 @@ public class ObjectStorageService {
                     exception
             );
         }
+    }
+    public InputStream download(String objectKey) {
+        GetObjectRequest request = GetObjectRequest.builder()
+                .bucket(properties.getBucket())
+                .key(objectKey)
+                .build();
+
+        return s3Client.getObject(request);
     }
 }

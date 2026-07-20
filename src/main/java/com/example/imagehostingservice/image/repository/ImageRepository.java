@@ -13,6 +13,8 @@ import tools.jackson.databind.ObjectMapper;
 import java.sql.ResultSet;
 import java.sql.SQLException;
 import java.time.OffsetDateTime;
+import java.util.List;
+import java.util.Optional;
 
 @Repository
 @RequiredArgsConstructor
@@ -103,6 +105,71 @@ public class ImageRepository {
                 sizeBytes,
                 width,
                 height
+        );
+    }
+
+    public Optional<Image> findById(Long imageId) {
+        String sql = """
+        SELECT
+            id,
+            owner_id,
+            original_filename,
+            original_storage_key,
+            thumbnail_storage_key,
+            content_type,
+            size_bytes,
+            width,
+            height,
+            is_public,
+            ai_tags,
+            tagging_status,
+            created_at,
+            updated_at
+        FROM images
+        WHERE id = ?
+        """;
+
+        return jdbcTemplate.query(
+                sql,
+                imageRowMapper,
+                imageId
+        ).stream().findFirst();
+    }
+
+    public List<Image> findAllByOwnerId(
+            Long ownerId,
+            int limit,
+            int offset
+    ) {
+        String sql = """
+        SELECT
+            id,
+            owner_id,
+            original_filename,
+            original_storage_key,
+            thumbnail_storage_key,
+            content_type,
+            size_bytes,
+            width,
+            height,
+            is_public,
+            ai_tags,
+            tagging_status,
+            created_at,
+            updated_at
+        FROM images
+        WHERE owner_id = ?
+        ORDER BY created_at DESC, id DESC
+        LIMIT ?
+        OFFSET ?
+        """;
+
+        return jdbcTemplate.query(
+                sql,
+                imageRowMapper,
+                ownerId,
+                limit,
+                offset
         );
     }
 }
