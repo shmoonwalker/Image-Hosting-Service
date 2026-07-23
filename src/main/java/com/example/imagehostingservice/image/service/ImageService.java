@@ -299,4 +299,44 @@ public class ImageService {
         );
     }
 
+    public void deleteImage(
+            String ownerEmail,
+            Long imageId
+    ) {
+        User owner = userRepository.findByEmail(ownerEmail)
+                .orElseThrow(() ->
+                        new IllegalStateException(
+                                "Authenticated user was not found"
+                        )
+                );
+
+        Image image = imageRepository.findById(imageId)
+                .orElseThrow(ImageNotFoundException::new);
+
+        if (!image.ownerId().equals(owner.id())) {
+            throw new ImageNotFoundException();
+        }
+
+        objectStorageService.delete(
+                image.originalStorageKey()
+        );
+
+        if (image.thumbnailStorageKey() != null &&
+                !image.thumbnailStorageKey().isBlank()) {
+            objectStorageService.delete(
+                    image.thumbnailStorageKey()
+            );
+        }
+
+        boolean deleted =
+                imageRepository.deleteByIdAndOwnerId(
+                        imageId,
+                        owner.id()
+                );
+
+        if (!deleted) {
+            throw new ImageNotFoundException();
+        }
+    }
+
 }

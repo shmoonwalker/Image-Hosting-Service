@@ -8,6 +8,7 @@ import software.amazon.awssdk.core.sync.RequestBody;
 import software.amazon.awssdk.services.s3.S3Client;
 import software.amazon.awssdk.services.s3.model.GetObjectRequest;
 import software.amazon.awssdk.services.s3.model.PutObjectRequest;
+import software.amazon.awssdk.services.s3.model.DeleteObjectRequest;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -74,5 +75,15 @@ public class ObjectStorageService {
                 .build();
 
         return s3Client.getObject(request);
+    }
+
+    public void delete(String objectKey) {
+        DeleteObjectRequest request =
+                DeleteObjectRequest.builder()
+                        .bucket(properties.getBucket())
+                        .key(objectKey)
+                        .build();
+
+        s3Client.deleteObject(request);
     }
 }
