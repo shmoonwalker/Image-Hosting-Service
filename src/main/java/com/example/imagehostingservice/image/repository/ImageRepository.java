@@ -62,38 +62,40 @@ public class ImageRepository {
             Long ownerId,
             String originalFilename,
             String originalStorageKey,
+            String thumbnailStorageKey,
             String contentType,
             Long sizeBytes,
             Integer width,
             Integer height
     ) {
         String sql = """
-                INSERT INTO images (
-                    owner_id,
-                    original_filename,
-                    original_storage_key,
-                    content_type,
-                    size_bytes,
-                    width,
-                    height
-                )
-                VALUES (?, ?, ?, ?, ?, ?, ?)
-                RETURNING
-                    id,
-                    owner_id,
-                    original_filename,
-                    original_storage_key,
-                    thumbnail_storage_key,
-                    content_type,
-                    size_bytes,
-                    width,
-                    height,
-                    is_public,
-                    ai_tags,
-                    tagging_status,
-                    created_at,
-                    updated_at
-                """;
+            INSERT INTO images (
+                owner_id,
+                original_filename,
+                original_storage_key,
+                thumbnail_storage_key,
+                content_type,
+                size_bytes,
+                width,
+                height
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            RETURNING
+                id,
+                owner_id,
+                original_filename,
+                original_storage_key,
+                thumbnail_storage_key,
+                content_type,
+                size_bytes,
+                width,
+                height,
+                is_public,
+                ai_tags,
+                tagging_status,
+                created_at,
+                updated_at
+            """;
 
         return jdbcTemplate.queryForObject(
                 sql,
@@ -101,6 +103,7 @@ public class ImageRepository {
                 ownerId,
                 originalFilename,
                 originalStorageKey,
+                thumbnailStorageKey,
                 contentType,
                 sizeBytes,
                 width,

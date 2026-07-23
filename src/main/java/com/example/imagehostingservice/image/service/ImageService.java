@@ -4,9 +4,9 @@ import com.example.imagehostingservice.exception.ImageNotFoundException;
 import com.example.imagehostingservice.image.dto.ImageContent;
 import com.example.imagehostingservice.image.dto.ImagePageResponse;
 import com.example.imagehostingservice.image.dto.ImageResponse;
-import com.example.imagehostingservice.image.dto.UpdateImageVisibilityRequest;
 import com.example.imagehostingservice.image.model.Image;
 import com.example.imagehostingservice.image.repository.ImageRepository;
+import com.example.imagehostingservice.image.thumbnail.ThumbnailGenerator;
 import com.example.imagehostingservice.storage.service.ObjectStorageService;
 import com.example.imagehostingservice.user.model.User;
 import com.example.imagehostingservice.user.repository.UserRepository;
@@ -16,6 +16,7 @@ import org.springframework.web.multipart.MultipartFile;
 import com.example.imagehostingservice.image.validation.ImageFileValidator;
 import com.example.imagehostingservice.image.validation.ValidatedImage;
 
+import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.List;
 
@@ -28,6 +29,7 @@ public class ImageService {
     private final UserRepository userRepository;
     private final ObjectStorageService objectStorageService;
     private final ImageRepository imageRepository;
+    private final ThumbnailGenerator thumbnailGenerator;
 
     public ImageResponse uploadImage(
             String ownerEmail,
@@ -42,13 +44,23 @@ public class ImageService {
         ValidatedImage validatedImage =
                 imageFileValidator.validate(file);
 
+        byte[] thumbnailBytes =
+                thumbnailGenerator.generate(file);
+
         String originalStorageKey =
                 objectStorageService.upload(file);
+
+        String thumbnailStorageKey =
+                objectStorageService.upload(
+                        thumbnailBytes,
+                        validatedImage.contentType()
+                );
 
         Image savedImage = imageRepository.save(
                 owner.id(),
                 validatedImage.originalFilename(),
                 originalStorageKey,
+                thumbnailStorageKey,
                 validatedImage.contentType(),
                 validatedImage.sizeBytes(),
                 validatedImage.width(),
@@ -251,6 +263,39 @@ public class ImageService {
                 size,
                 totalElements,
                 totalPages
+        );
+    }
+
+    public ImageContent getImageThumbnail(
+            Long imageId,
+            String requesterEmail
+    ) {
+        Image image = imageRepository.findById(imageId)
+                .orElseThrow(ImageNotFoundException::new);
+
+        if (!image.isPublic() &&
+                !isOwner(image, requesterEmail)) {
+            throw new ImageNotFoundException();
+        }
+
+        String thumbnailStorageKey =
+                image.thumbnailStorageKey();
+
+        if (thumbnailStorageKey == null ||
+                thumbnailStorageKey.isBlank()) {
+            throw new ImageNotFoundException();
+        }
+
+        byte[] thumbnailBytes =
+                objectStorageService.downloadBytes(
+                        thumbnailStorageKey
+                );
+
+        return new ImageContent(
+                new ByteArrayInputStream(thumbnailBytes),
+                image.contentType(),
+                thumbnailBytes.length,
+                "thumbnail-" + image.originalFilename()
         );
     }
 

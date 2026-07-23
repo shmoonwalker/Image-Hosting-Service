@@ -22,24 +22,11 @@ public class ObjectStorageService {
     private final ObjectStorageProperties properties;
 
     public String upload(MultipartFile file) {
-        String objectKey = UUID.randomUUID().toString();
-
-        PutObjectRequest request = PutObjectRequest.builder()
-                .bucket(properties.getBucket())
-                .key(objectKey)
-                .contentType(file.getContentType())
-                .contentLength(file.getSize())
-                .build();
-
         try {
-            s3Client.putObject(
-                    request,
-                    RequestBody.fromBytes(
-                            file.getBytes()
-                    )
+            return upload(
+                    file.getBytes(),
+                    file.getContentType()
             );
-
-            return objectKey;
         } catch (IOException exception) {
             throw new UncheckedIOException(
                     "Could not read the uploaded file",
@@ -47,6 +34,39 @@ public class ObjectStorageService {
             );
         }
     }
+
+    public String upload(
+            byte[] content,
+            String contentType
+    ) {
+        String objectKey = UUID.randomUUID().toString();
+
+        PutObjectRequest request = PutObjectRequest.builder()
+                .bucket(properties.getBucket())
+                .key(objectKey)
+                .contentType(contentType)
+                .contentLength((long) content.length)
+                .build();
+
+        s3Client.putObject(
+                request,
+                RequestBody.fromBytes(content)
+        );
+
+        return objectKey;
+    }
+
+    public byte[] downloadBytes(String objectKey) {
+        GetObjectRequest request = GetObjectRequest.builder()
+                .bucket(properties.getBucket())
+                .key(objectKey)
+                .build();
+
+        return s3Client
+                .getObjectAsBytes(request)
+                .asByteArray();
+    }
+
     public InputStream download(String objectKey) {
         GetObjectRequest request = GetObjectRequest.builder()
                 .bucket(properties.getBucket())
