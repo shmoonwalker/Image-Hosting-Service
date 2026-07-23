@@ -1,5 +1,6 @@
 package com.example.imagehostingservice.image.dto;
 
+import com.example.imagehostingservice.image.model.ImageTags;
 import com.example.imagehostingservice.image.model.TaggingStatus;
 
 import java.time.OffsetDateTime;
@@ -12,6 +13,7 @@ public record ImageResponse(Long id,
                             Integer width,
                             Integer height,
                             boolean isPublic,
+                            ImageTags aiTags,
                             TaggingStatus taggingStatus,
                             OffsetDateTime createdAt) {
 }
