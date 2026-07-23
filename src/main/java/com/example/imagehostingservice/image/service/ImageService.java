@@ -6,6 +6,7 @@ import com.example.imagehostingservice.image.dto.ImagePageResponse;
 import com.example.imagehostingservice.image.dto.ImageResponse;
 import com.example.imagehostingservice.image.model.Image;
 import com.example.imagehostingservice.image.repository.ImageRepository;
+import com.example.imagehostingservice.image.tagging.dispatch.ImageTaggingDispatcher;
 import com.example.imagehostingservice.image.thumbnail.ThumbnailGenerator;
 import com.example.imagehostingservice.storage.service.ObjectStorageService;
 import com.example.imagehostingservice.user.model.User;
@@ -30,6 +31,7 @@ public class ImageService {
     private final ObjectStorageService objectStorageService;
     private final ImageRepository imageRepository;
     private final ThumbnailGenerator thumbnailGenerator;
+    private final ImageTaggingDispatcher imageTaggingDispatcher;
 
     public ImageResponse uploadImage(
             String ownerEmail,
@@ -66,6 +68,7 @@ public class ImageService {
                 validatedImage.width(),
                 validatedImage.height()
         );
+        imageTaggingDispatcher.dispatch(savedImage.id());
 
         return new ImageResponse(
                 savedImage.id(),
@@ -76,6 +79,7 @@ public class ImageService {
                 savedImage.width(),
                 savedImage.height(),
                 savedImage.isPublic(),
+                savedImage.aiTags(),
                 savedImage.taggingStatus(),
                 savedImage.createdAt()
         );
@@ -134,6 +138,7 @@ public class ImageService {
                         image.width(),
                         image.height(),
                         image.isPublic(),
+                        image.aiTags(),
                         image.taggingStatus(),
                         image.createdAt()
                 ))
@@ -184,6 +189,7 @@ public class ImageService {
                 updatedImage.width(),
                 updatedImage.height(),
                 updatedImage.isPublic(),
+                updatedImage.aiTags(),
                 updatedImage.taggingStatus(),
                 updatedImage.createdAt()
         );
@@ -210,6 +216,7 @@ public class ImageService {
                 image.width(),
                 image.height(),
                 image.isPublic(),
+                image.aiTags(),
                 image.taggingStatus(),
                 image.createdAt()
         );
@@ -245,6 +252,7 @@ public class ImageService {
                         image.width(),
                         image.height(),
                         image.isPublic(),
+                        image.aiTags(),
                         image.taggingStatus(),
                         image.createdAt()
                 ))
