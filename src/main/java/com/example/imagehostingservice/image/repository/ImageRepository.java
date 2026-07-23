@@ -276,4 +276,23 @@ public class ImageRepository {
 
         return count != null ? count : 0L;
     }
+
+    public boolean deleteByIdAndOwnerId(
+            Long imageId,
+            Long ownerId
+    ) {
+        String sql = """
+            DELETE FROM images
+            WHERE id = ?
+              AND owner_id = ?
+            """;
+
+        int deletedRows = jdbcTemplate.update(
+                sql,
+                imageId,
+                ownerId
+        );
+
+        return deletedRows == 1;
+    }
 }

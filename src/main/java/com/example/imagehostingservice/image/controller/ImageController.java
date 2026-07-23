@@ -206,4 +206,17 @@ public class ImageController {
                         )
                 );
     }
+
+    @DeleteMapping("/{imageId}")
+    public ResponseEntity<Void> deleteImage(
+            @PathVariable Long imageId,
+            Authentication authentication
+    ) {
+        imageService.deleteImage(
+                authentication.getName(),
+                imageId
+        );
+
+        return ResponseEntity.noContent().build();
+    }
 }
