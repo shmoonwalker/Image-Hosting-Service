@@ -47,6 +47,10 @@ public class SecurityConfig {
                                 HttpMethod.GET,
                                 "/api/v1/images/*/content"
                         ).permitAll()
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/images/*/thumbnail"
+                        ).permitAll()
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions

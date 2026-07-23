@@ -161,4 +161,49 @@ public class ImageController {
 
         return ResponseEntity.ok(response);
     }
+
+    @GetMapping("/{imageId}/thumbnail")
+    public ResponseEntity<InputStreamResource> getImageThumbnail(
+            @PathVariable Long imageId,
+            Authentication authentication
+    ) {
+        String requesterEmail = authentication == null
+                ? null
+                : authentication.getName();
+
+        ImageContent content =
+                imageService.getImageThumbnail(
+                        imageId,
+                        requesterEmail
+                );
+
+        ContentDisposition disposition =
+                ContentDisposition.inline()
+                        .filename(
+                                content.originalFilename(),
+                                StandardCharsets.UTF_8
+                        )
+                        .build();
+
+        return ResponseEntity.ok()
+                .contentType(
+                        MediaType.parseMediaType(
+                                content.contentType()
+                        )
+                )
+                .contentLength(content.contentLength())
+                .header(
+                        HttpHeaders.CONTENT_DISPOSITION,
+                        disposition.toString()
+                )
+                .header(
+                        "X-Content-Type-Options",
+                        "nosniff"
+                )
+                .body(
+                        new InputStreamResource(
+                                content.inputStream()
+                        )
+                );
+    }
 }
