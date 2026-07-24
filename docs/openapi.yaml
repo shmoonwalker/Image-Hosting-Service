@@ -853,30 +853,26 @@ components:
           type: boolean
           example: false
         aiTags:
-          nullable: true
-          allOf:
+          anyOf:
             - $ref: "#/components/schemas/ImageTags"
+            - type: "null"
         taggingStatus:
           $ref: "#/components/schemas/TaggingStatus"
         taggingStartedAt:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
           example: "2026-07-24T12:00:01Z"
         taggingCompletedAt:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
           example: "2026-07-24T12:00:04Z"
         taggingDurationMs:
-          type: integer
+          type: [integer, "null"]
           format: int64
           minimum: 0
-          nullable: true
           example: 3000
         taggingError:
-          type: string
-          nullable: true
+          type: [string, "null"]
           description: Sanitized processing failure information
           example: null
         contentUrl:
@@ -890,9 +886,8 @@ components:
           format: date-time
           example: "2026-07-24T12:00:00Z"
         updatedAt:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
           example: "2026-07-24T12:00:04Z"
 
     ImagePageResponse:
@@ -1008,9 +1003,8 @@ components:
           format: date-time
           example: "2026-07-25T12:00:00Z"
         revokedAt:
-          type: string
+          type: [string, "null"]
           format: date-time
-          nullable: true
           example: null
         active:
           type: boolean
@@ -1068,9 +1062,9 @@ components:
           minimum: 1
           example: 1080
         aiTags:
-          nullable: true
-          allOf:
+          anyOf:
             - $ref: "#/components/schemas/ImageTags"
+            - type: "null"
         taggingStatus:
           $ref: "#/components/schemas/TaggingStatus"
         contentUrl:
