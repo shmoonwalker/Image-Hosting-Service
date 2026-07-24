@@ -1,196 +1,187 @@
 # Image Hosting Service
 
-A secure, AI-powered image hosting platform built with Spring Boot.
+A secure, AI-powered image-hosting REST API built with Spring Boot.
 
-The application allows users to upload, manage, search, and securely share images. Uploaded images are stored in private object storage and automatically analyzed by a vision-capable AI model to generate searchable objects, descriptive tags, and prominent colors.
-
-## Project Status
-
-🚧 **In development**
-
-The project is currently in the design and implementation phase.
+Users can upload and manage images that are private by default. Images are stored in a private Cloudflare R2 bucket and delivered through authorization-aware API endpoints. Gemini analyzes uploaded images asynchronously to generate searchable objects, descriptive tags, and prominent colors.
 
 ## Features
 
-### Authentication and Sessions
+- Registration, login, logout, and database-backed sessions
+- Automatic login after registration
+- JPEG, PNG, and WebP uploads up to 10 MB
+- Private-by-default image access
+- Public/private visibility management
+- Personal image library with pagination
+- Public gallery using 100 × 100 thumbnails
+- Asynchronous Gemini image analysis
+- AI-processing status tracking
+- Search through AI-generated objects, tags, and colors
+- Expiring and revocable private sharing links
+- Owner-only image deletion
+- Interactive Swagger API documentation
 
-* User registration
-* User login and logout
-* Secure password hashing with bcrypt
-* Opaque database-backed sessions
-* Session expiration
-* Secure cookie-based authentication
+## Technology
 
-### Image Management
+- Java 26
+- Spring Boot 4.1
+- Spring Security
+- Spring Session JDBC
+- Spring JDBC
+- PostgreSQL
+- Flyway
+- Cloudflare R2
+- Google Gemini
+- Thumbnailator
+- Maven
+- Docker
+- Railway
+- GitHub Actions
+- GitHub Container Registry
 
-* Upload images up to 10 MB
-* View all images uploaded by the authenticated user
-* Delete owned images
-* Public and private image visibility
-* Secure image access through backend proxy endpoints
-* Image metadata including file type, dimensions, and file size
+## Privacy model
 
-### AI Image Tagging
+Every uploaded image is private by default.
 
-Each uploaded image is analyzed by a vision-capable AI model.
+The uploader can immediately view the image, thumbnail, metadata, and AI-processing status. Other users cannot access it unless the owner explicitly makes it public or creates a valid temporary sharing link.
 
-The generated metadata includes:
+Public images can appear in the gallery and search results. Making an image private again removes public access.
 
-* Objects visible in the image
-* Descriptive tags such as setting, mood, weather, and time of day
-* Up to three prominent colors
+## Architecture
 
-AI-generated metadata is stored in PostgreSQL using JSONB.
+```text
+API client
+    |
+    v
+Spring Boot API
+    |-- PostgreSQL: users, sessions, image metadata, and AI tags
+    |-- Cloudflare R2: original images and thumbnails
+    `-- Gemini: asynchronous image analysis
+```
 
-### Search and Discovery
+PostgreSQL uses numeric internal identifiers for database relationships. Public API resources use UUIDs so internal database identifiers are not exposed.
 
-* Search public images using free text
-* Search through AI-generated objects, tags, and colors
-* View the latest 50 public images
-* Use generated thumbnails for faster image browsing
+## Configuration
 
-### Image Processing
+Configuration is supplied through environment variables. Secrets must never be committed to the repository.
 
-* Asynchronous AI image tagging
-* Image-processing status tracking
-* 100 × 100 thumbnail generation
-* AI-tagging duration measurement
-* Failure handling for unsuccessful image processing
+| Variable | Description |
+| --- | --- |
+| `DB_URL` | PostgreSQL JDBC URL |
+| `DB_USER` | PostgreSQL username |
+| `DB_PASSWORD` | PostgreSQL password |
+| `OBJECT_STORAGE_ENDPOINT` | Cloudflare R2 S3 endpoint |
+| `OBJECT_STORAGE_REGION` | Object-storage region |
+| `OBJECT_STORAGE_ACCESS_KEY_ID` | Cloudflare R2 access key |
+| `OBJECT_STORAGE_SECRET_ACCESS_KEY` | Cloudflare R2 secret key |
+| `OBJECT_STORAGE_BUCKET` | Private Cloudflare R2 bucket |
+| `GEMINI_API_KEY` | Google Gemini API key |
+| `PORT` | HTTP port, defaults to `8080` |
 
-### Private Image Sharing
+## Application profiles
 
-Users can generate temporary share links for private images.
+The application uses separate Spring profiles:
 
-Share links:
+- `dev` for local development
+- `test` for automated tests
+- `prod` for Railway deployment
 
-* Use secure random tokens
-* Expire after a selected period
-* Can be revoked by the image owner
-* Allow access without requiring an account
+Start the development profile with:
 
-## Technology Stack
+```bash
+SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
+```
 
-### Backend
+## API
 
-* Java
-* Spring Boot
-* Spring Security
-* Spring Session JDBC
-* Spring JDBC
-* PostgreSQL
-* Flyway
+The API uses the following base path:
 
-### Storage and Image Processing
+```text
+http://localhost:8080/api/v1
+```
 
-* Backblaze B2
-* S3-compatible private object storage
-* Image-processing library for thumbnail generation
+Main endpoint groups:
 
-### AI Integration
+- `/api/v1/auth` — registration, login, logout, and session information
+- `/api/v1/images` — upload, gallery, search, ownership, and visibility
+- `/api/v1/images/{imageId}/share-links` — private sharing-link management
+- `/api/v1/shares/{token}` — anonymous access through a valid sharing token
 
-* Vision-capable AI model
-* Structured AI responses
-* JSON-based image metadata
+The complete API contract is available in the [OpenAPI specification](docs/openapi.yaml).
 
-### Infrastructure
+## Swagger
 
-* Docker
-* GitHub Actions
-* GitHub Container Registry
-* Cloud deployment
+When the application is running:
 
-### Frontend
+```text
+Swagger UI:   http://localhost:8080/swagger-ui.html
+OpenAPI JSON: http://localhost:8080/v3/api-docs
+OpenAPI YAML: http://localhost:8080/v3/api-docs.yaml
+```
 
-A lightweight frontend application will be created to demonstrate the backend functionality.
-
-## Application Flow
-
-### Image Upload
-
-1. An authenticated user uploads an image.
-2. The backend validates the file type and size.
-3. The original image is stored in private object storage.
-4. Image metadata is saved in PostgreSQL.
-5. A thumbnail is generated.
-6. AI analysis starts asynchronously.
-7. Generated tags, objects, and colors are stored in the database.
-8. The image becomes searchable when processing is complete.
-
-### Image Access
-
-Images are stored in a private bucket and are not exposed directly.
-
-The backend verifies access permissions and streams the requested image from object storage to the client.
-
-Public images can be viewed by everyone. Private images can only be accessed by their owner or through a valid share link.
-
-## Security
-
-The application is designed with the following security measures:
-
-* Bcrypt password hashing
-* Opaque session identifiers
-* Database-backed session expiration
-* HTTP-only authentication cookies
-* Image ownership validation
-* Private object-storage buckets
-* Secure share-link tokens
-* File-size restrictions
-* Image-content validation
-* Random object-storage keys
-* Restricted image formats
-
-## Documentation
-
-Additional project documentation is available in the [`docs`](./docs) directory.
-
-The documentation will include:
-
-* Project scope
-* Database entity-relationship diagram
-* API design
-* Application architecture
-* Deployment information
+Authentication uses an opaque `SESSION` cookie. Authenticated state-changing operations also require CSRF protection.
 
 ## Testing
 
-The project will include automated tests for:
+Run the complete test suite with:
 
-* Authentication and session management
-* Image upload validation
-* Image ownership and authorization
-* Public and private image access
-* Image deletion
-* AI-tagging success and failure
-* Search functionality
-* Thumbnail generation
-* Share-link expiration and revocation
+```bash
+./mvnw clean verify
+```
 
-External AI and object-storage services will be replaced with test implementations during automated testing.
+Automated tests use isolated configuration and must not call production PostgreSQL, Cloudflare R2, or Gemini services.
 
-## CI/CD
+## Docker
 
-GitHub Actions will be used to:
+Build the application image:
 
-* Run automated tests
-* Build the Spring Boot application
-* Build a Docker image
-* Push the Docker image to GitHub Container Registry
+```bash
+docker build -t image-hosting-service .
+```
 
-## Getting Started
+Run the container with the required environment variables:
 
-Local development and deployment instructions will be added as the project implementation progresses.
+```bash
+docker run --rm -p 8080:8080 \
+  -e SPRING_PROFILES_ACTIVE=prod \
+  -e DB_URL \
+  -e DB_USER \
+  -e DB_PASSWORD \
+  -e OBJECT_STORAGE_ENDPOINT \
+  -e OBJECT_STORAGE_REGION \
+  -e OBJECT_STORAGE_ACCESS_KEY_ID \
+  -e OBJECT_STORAGE_SECRET_ACCESS_KEY \
+  -e OBJECT_STORAGE_BUCKET \
+  -e GEMINI_API_KEY \
+  image-hosting-service
+```
 
-The final documentation will include:
+## Deployment
 
-* Required software
-* Environment variables
-* Database setup
-* Object-storage configuration
-* AI-provider configuration
-* Local development instructions
-* Docker commands
+The backend and PostgreSQL database are designed for deployment on Railway. Original images and thumbnails remain in a private Cloudflare R2 bucket.
+
+Railway-specific configuration is kept outside the application’s business logic so the Docker image can later be moved to another hosting provider.
+
+## Security
+
+- Passwords are hashed with bcrypt
+- Sessions use opaque identifiers
+- Session cookies are HTTP-only
+- Production cookies are secure
+- Authenticated mutations use CSRF protection
+- Cloudflare R2 remains private
+- Image access is controlled by the backend
+- Ownership is verified for private resources
+- Public UUIDs are used in API URLs
+- Sharing tokens are securely generated and stored as hashes
+- Invalid, expired, and revoked sharing links are rejected
+- Credentials and tokens are excluded from logs
+- Inaccessible private images return non-enumerating responses
+
+## Documentation
+
+- [OpenAPI specification](docs/openapi.yaml)
+- [Database ERD](docs/database-erd.md)
 
 ## License
 
-This project is developed for educational and portfolio purposes.
+This project is licensed under the [MIT License](LICENSE).

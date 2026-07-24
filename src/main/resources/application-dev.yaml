@@ -1,0 +1,40 @@
+spring:
+  config:
+    activate:
+      on-profile: dev
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/image_hosting}
+    username: ${DB_USER}
+    password: ${DB_PASSWORD}
+
+  session:
+    jdbc:
+      initialize-schema: always
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false
+        same-site: lax
+
+logging:
+  level:
+    root: INFO
+    com.example.imagehostingservice: DEBUG
+    software.amazon.awssdk: WARN
+
+management:
+  endpoint:
+    health:
+      show-details: always
+
+springdoc:
+  api-docs:
+    enabled: true
+    path: /v3/api-docs
+
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html

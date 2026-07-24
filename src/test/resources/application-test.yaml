@@ -1,0 +1,53 @@
+spring:
+  config:
+    activate:
+      on-profile: test
+
+  datasource:
+    url: ${DB_URL:jdbc:postgresql://localhost:5432/image_hosting_test}
+    username: ${DB_USER:test}
+    password: ${DB_PASSWORD:test}
+
+  session:
+    jdbc:
+      initialize-schema: always
+
+server:
+  servlet:
+    session:
+      cookie:
+        secure: false
+        same-site: lax
+
+object-storage:
+  endpoint: ${OBJECT_STORAGE_ENDPOINT:http://localhost:9000}
+  region: ${OBJECT_STORAGE_REGION:auto}
+  access-key-id: ${OBJECT_STORAGE_ACCESS_KEY_ID:test-access-key}
+  secret-access-key: ${OBJECT_STORAGE_SECRET_ACCESS_KEY:test-secret-key}
+  bucket: ${OBJECT_STORAGE_BUCKET:test-bucket}
+
+gemini:
+  api-key: ${GEMINI_API_KEY:test-key-not-used}
+  model: ${GEMINI_MODEL:test-model}
+
+logging:
+  level:
+    root: WARN
+    com.example.imagehostingservice: INFO
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health
+
+  endpoint:
+    health:
+      show-details: never
+
+springdoc:
+  api-docs:
+    enabled: false
+
+  swagger-ui:
+    enabled: false
