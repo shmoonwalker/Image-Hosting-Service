@@ -1,224 +1,253 @@
-openapi: 3.0.3
+openapi: 3.1.0
+
 
 info:
   title: Image Hosting Service API
   version: 1.0.0
   description: |
-    REST API for an AI-powered image hosting application.
+    REST API for uploading, managing, searching, and securely sharing images.
 
-    Users can register, upload public or private images, manage their own
-    images, and search public images using AI-generated objects, tags,
-    and colors.
+    Uploaded images are private by default. Original files and thumbnails are
+    stored in a private Cloudflare R2 bucket and delivered through protected API
+    endpoints. Gemini analyzes images asynchronously and generates searchable
+    objects, tags, and colors.
+
+    Authentication uses an opaque database-backed SESSION cookie. Authenticated
+    state-changing requests also require the X-CSRF-TOKEN header.
+  license:
+    name: MIT
 
 servers:
   - url: http://localhost:8080/api/v1
-    description: Local development server
+    description: Local development
 
 tags:
   - name: Authentication
+    description: Registration, login, logout, and session operations
   - name: Images
-  - name: Public Gallery
+    description: Image upload, management, gallery, search, and content
+  - name: Sharing
+    description: Temporary private-image sharing links
 
 paths:
   /auth/register:
     post:
-      tags: [Authentication]
-      summary: Register a new user
-      description: Creates an account, logs the user in automatically, and returns a session cookie.
+      tags:
+        - Authentication
+      summary: Register a user
+      description: Creates an account, starts a session, and returns the authenticated user.
       operationId: register
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/RegisterRequest'
+              $ref: "#/components/schemas/RegisterRequest"
       responses:
-        '201':
-          description: User registered and logged in
+        "201":
+          description: User registered and authenticated
           headers:
             Set-Cookie:
-              description: Opaque database-backed session cookie
-              schema:
-                type: string
-                example: SESSION=opaque-session-id; Path=/; HttpOnly; Secure; SameSite=Lax
+              $ref: "#/components/headers/SessionCookie"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthenticatedUser'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '409':
-          description: Email is already registered
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/AuthenticatedUserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "409":
+          $ref: "#/components/responses/EmailConflict"
 
   /auth/login:
     post:
-      tags: [Authentication]
+      tags:
+        - Authentication
       summary: Log in
+      description: Authenticates the user and starts a database-backed session.
       operationId: login
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/LoginRequest'
+              $ref: "#/components/schemas/LoginRequest"
       responses:
-        '200':
-          description: Login successful
+        "200":
+          description: Authentication successful
           headers:
             Set-Cookie:
-              description: Opaque database-backed session cookie
-              schema:
-                type: string
-                example: SESSION=opaque-session-id; Path=/; HttpOnly; Secure; SameSite=Lax
+              $ref: "#/components/headers/SessionCookie"
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthenticatedUser'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          description: Invalid email or password
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/AuthenticatedUserResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/InvalidCredentials"
 
   /auth/logout:
     post:
-      tags: [Authentication]
+      tags:
+        - Authentication
       summary: Log out
+      description: Invalidates the current session and clears the session cookie.
       operationId: logout
       security:
         - sessionCookie: []
+          csrfToken: []
       responses:
-        '204':
-          description: Logout successful
+        "204":
+          description: Session invalidated
           headers:
             Set-Cookie:
               description: Expired session cookie
               schema:
                 type: string
-                example: SESSION=; Path=/; HttpOnly; Secure; SameSite=Lax; Max-Age=0
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                example: SESSION=; Path=/; HttpOnly; Max-Age=0
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
 
   /auth/me:
     get:
-      tags: [Authentication]
+      tags:
+        - Authentication
       summary: Get the current user
       operationId: getCurrentUser
       security:
         - sessionCookie: []
       responses:
-        '200':
+        "200":
           description: Current authenticated user
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/AuthenticatedUser'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                $ref: "#/components/schemas/AuthenticatedUserResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /auth/csrf:
+    get:
+      tags:
+        - Authentication
+      summary: Get a CSRF token
+      description: Returns the token required for authenticated state-changing requests.
+      operationId: getCsrfToken
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: CSRF token
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/CsrfTokenResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /images:
     post:
-      tags: [Images]
+      tags:
+        - Images
       summary: Upload an image
       description: |
-        Uploads an image of up to 10 MB. Thumbnail generation and AI tagging
-        continue asynchronously after the upload succeeds.
+        Uploads a JPEG, PNG, or WebP image up to 10 MB.
+
+        Every uploaded image is private by default. Thumbnail generation is
+        completed during upload, and Gemini analysis continues asynchronously.
       operationId: uploadImage
       security:
         - sessionCookie: []
+          csrfToken: []
       requestBody:
         required: true
         content:
           multipart/form-data:
             schema:
               type: object
-              required: [file, isPublic]
+              additionalProperties: false
+              required:
+                - file
               properties:
                 file:
                   type: string
                   format: binary
-                  description: JPEG, PNG, or WebP image, maximum 10 MB
-                isPublic:
-                  type: boolean
-                  default: false
+                  description: JPEG, PNG, or WebP image up to 10 MB
       responses:
-        '201':
-          description: Image uploaded
+        "201":
+          description: Image uploaded as private
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ImageResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '413':
-          description: Image exceeds the 10 MB limit
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '415':
-          description: Unsupported format or invalid image content
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ImageResponse"
+        "400":
+          $ref: "#/components/responses/InvalidImage"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "413":
+          $ref: "#/components/responses/PayloadTooLarge"
+        "415":
+          $ref: "#/components/responses/UnsupportedImageType"
 
     get:
-      tags: [Images]
+      tags:
+        - Images
       summary: Browse or search public images
       description: |
-        Without `q`, returns public images from newest to oldest.
-        With `q`, searches AI-generated objects, tags, and colors.
+        Returns public images from newest to oldest.
+
+        When `q` is supplied, the query searches completed AI-generated
+        objects, tags, and colors. Private images are never included.
       operationId: getPublicImages
       parameters:
-        - $ref: '#/components/parameters/SearchQuery'
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Size'
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
       responses:
-        '200':
-          description: Public image page
+        "200":
+          description: Page of public images
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ImagePage'
-        '400':
-          $ref: '#/components/responses/BadRequest'
+                $ref: "#/components/schemas/ImagePageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
 
   /images/mine:
     get:
-      tags: [Images]
-      summary: Get images owned by the current user
+      tags:
+        - Images
+      summary: List owned images
+      description: Returns public and private images owned by the authenticated user.
       operationId: getMyImages
       security:
         - sessionCookie: []
       parameters:
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Size'
+        - $ref: "#/components/parameters/Page"
+        - $ref: "#/components/parameters/Size"
       responses:
-        '200':
-          description: Current user's public and private images
+        "200":
+          description: Page of owned images
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ImagePage'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
+                $ref: "#/components/schemas/ImagePageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
 
   /images/{imageId}:
     parameters:
-      - $ref: '#/components/parameters/ImageId'
+      - $ref: "#/components/parameters/ImageId"
 
     get:
-      tags: [Images]
+      tags:
+        - Images
       summary: Get image metadata
       description: Public images are available to everyone. Private images are available only to their owner.
       operationId: getImage
@@ -226,160 +255,301 @@ paths:
         - {}
         - sessionCookie: []
       responses:
-        '200':
-          description: Image metadata
+        "200":
+          description: Accessible image metadata
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ImageResponse'
-        '404':
-          description: Image does not exist or is not accessible
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                $ref: "#/components/schemas/ImageResponse"
+        "404":
+          $ref: "#/components/responses/ImageNotFound"
 
     patch:
-      tags: [Images]
+      tags:
+        - Images
       summary: Change image visibility
+      description: Makes an owned image public or private.
       operationId: updateImageVisibility
       security:
         - sessionCookie: []
+          csrfToken: []
       requestBody:
         required: true
         content:
           application/json:
             schema:
-              $ref: '#/components/schemas/UpdateImageVisibilityRequest'
+              $ref: "#/components/schemas/UpdateImageVisibilityRequest"
       responses:
-        '200':
+        "200":
           description: Visibility updated
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/ImageResponse'
-        '400':
-          $ref: '#/components/responses/BadRequest'
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/ImageResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/ImageNotFound"
 
     delete:
-      tags: [Images]
+      tags:
+        - Images
       summary: Delete an image
-      description: Deletes the database record, original object, and thumbnail object.
+      description: Deletes the image record, original object, thumbnail, and sharing links.
       operationId: deleteImage
       security:
         - sessionCookie: []
+          csrfToken: []
       responses:
-        '204':
+        "204":
           description: Image deleted
-        '401':
-          $ref: '#/components/responses/Unauthorized'
-        '403':
-          $ref: '#/components/responses/Forbidden'
-        '404':
-          $ref: '#/components/responses/NotFound'
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/ImageNotFound"
 
   /images/{imageId}/content:
     get:
-      tags: [Images]
+      tags:
+        - Images
       summary: Stream the original image
       operationId: getImageContent
       security:
         - {}
         - sessionCookie: []
       parameters:
-        - $ref: '#/components/parameters/ImageId'
+        - $ref: "#/components/parameters/ImageId"
       responses:
-        '200':
+        "200":
           description: Original image content
           headers:
             Content-Disposition:
-              schema:
-                type: string
-                example: inline
+              $ref: "#/components/headers/ContentDisposition"
             X-Content-Type-Options:
-              schema:
-                type: string
-                example: nosniff
+              $ref: "#/components/headers/NoSniff"
           content:
             image/jpeg:
-              schema: {type: string, format: binary}
-            image/png:
-              schema: {type: string, format: binary}
-            image/webp:
-              schema: {type: string, format: binary}
-        '404':
-          description: Image does not exist or is not accessible
-          content:
-            application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/ImageNotFound"
 
   /images/{imageId}/thumbnail:
     get:
-      tags: [Images]
-      summary: Stream the 100 x 100 thumbnail
+      tags:
+        - Images
+      summary: Stream the image thumbnail
+      description: Returns the generated 100 × 100 thumbnail.
       operationId: getImageThumbnail
       security:
         - {}
         - sessionCookie: []
       parameters:
-        - $ref: '#/components/parameters/ImageId'
+        - $ref: "#/components/parameters/ImageId"
       responses:
-        '200':
-          description: Thumbnail content
+        "200":
+          description: Thumbnail image content
           headers:
             Content-Disposition:
-              schema:
-                type: string
-                example: inline
+              $ref: "#/components/headers/ContentDisposition"
             X-Content-Type-Options:
-              schema:
-                type: string
-                example: nosniff
+              $ref: "#/components/headers/NoSniff"
           content:
             image/jpeg:
-              schema: {type: string, format: binary}
+              schema:
+                type: string
+                format: binary
             image/png:
-              schema: {type: string, format: binary}
+              schema:
+                type: string
+                format: binary
             image/webp:
-              schema: {type: string, format: binary}
-        '404':
-          description: Image or thumbnail does not exist, or is not accessible
-          content:
-            application/json:
               schema:
-                $ref: '#/components/schemas/ErrorResponse'
-        '409':
-          description: Thumbnail generation is not complete
-          content:
-            application/json:
-              schema:
-                $ref: '#/components/schemas/ErrorResponse'
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/ImageNotFound"
 
-  /users/{userId}/images:
-    get:
-      tags: [Public Gallery]
-      summary: Get a user's public images
-      operationId: getUserPublicImages
-      parameters:
-        - $ref: '#/components/parameters/UserId'
-        - $ref: '#/components/parameters/Page'
-        - $ref: '#/components/parameters/Size'
+  /images/{imageId}/share-links:
+    parameters:
+      - $ref: "#/components/parameters/ImageId"
+
+    post:
+      tags:
+        - Sharing
+      summary: Create a private sharing link
+      description: |
+        Creates a temporary link for an owned private image.
+
+        The returned sharing URL contains the raw token and is shown only once.
+        Only a cryptographic hash of the token is stored.
+      operationId: createImageShareLink
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateShareLinkRequest"
       responses:
-        '200':
-          description: User's public gallery
+        "201":
+          description: Sharing link created
           content:
             application/json:
               schema:
-                $ref: '#/components/schemas/PublicUserGalleryResponse'
-        '404':
-          $ref: '#/components/responses/NotFound'
+                $ref: "#/components/schemas/ShareLinkCreatedResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/ImageNotFound"
+        "409":
+          $ref: "#/components/responses/PublicImageShareConflict"
+
+    get:
+      tags:
+        - Sharing
+      summary: List image sharing links
+      description: Returns sharing-link metadata without returning secret tokens.
+      operationId: getImageShareLinks
+      security:
+        - sessionCookie: []
+      responses:
+        "200":
+          description: Sharing links belonging to the image
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ShareLinkListResponse"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "404":
+          $ref: "#/components/responses/ImageNotFound"
+
+  /images/{imageId}/share-links/{shareLinkId}:
+    delete:
+      tags:
+        - Sharing
+      summary: Revoke a sharing link
+      operationId: revokeImageShareLink
+      security:
+        - sessionCookie: []
+          csrfToken: []
+      parameters:
+        - $ref: "#/components/parameters/ImageId"
+        - $ref: "#/components/parameters/ShareLinkId"
+      responses:
+        "204":
+          description: Sharing link revoked
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/ShareLinkNotFound"
+
+  /shares/{token}:
+    get:
+      tags:
+        - Sharing
+      summary: Get shared-image metadata
+      description: Returns image metadata when the sharing token is valid, active, and unexpired.
+      operationId: getSharedImage
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+      responses:
+        "200":
+          description: Shared-image metadata
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SharedImageResponse"
+        "404":
+          $ref: "#/components/responses/SharedImageNotFound"
+
+  /shares/{token}/content:
+    get:
+      tags:
+        - Sharing
+      summary: Stream the shared image
+      operationId: getSharedImageContent
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+      responses:
+        "200":
+          description: Shared original image
+          headers:
+            Content-Disposition:
+              $ref: "#/components/headers/ContentDisposition"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/SharedImageNotFound"
+
+  /shares/{token}/thumbnail:
+    get:
+      tags:
+        - Sharing
+      summary: Stream the shared-image thumbnail
+      operationId: getSharedImageThumbnail
+      parameters:
+        - $ref: "#/components/parameters/ShareToken"
+      responses:
+        "200":
+          description: Shared 100 × 100 thumbnail
+          headers:
+            Content-Disposition:
+              $ref: "#/components/headers/ContentDisposition"
+            X-Content-Type-Options:
+              $ref: "#/components/headers/NoSniff"
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+            image/webp:
+              schema:
+                type: string
+                format: binary
+        "404":
+          $ref: "#/components/responses/SharedImageNotFound"
 
 components:
   securitySchemes:
@@ -387,30 +557,51 @@ components:
       type: apiKey
       in: cookie
       name: SESSION
-      description: Opaque session ID managed through Spring Session JDBC
+      description: Opaque session identifier stored by Spring Session JDBC
+
+    csrfToken:
+      type: apiKey
+      in: header
+      name: X-CSRF-TOKEN
+      description: CSRF token returned by GET /auth/csrf
 
   parameters:
     ImageId:
       name: imageId
       in: path
       required: true
+      description: Public image UUID
       schema:
         type: string
         format: uuid
+      example: c98237ef-192c-4fd5-b2e4-7e0bd5a68253
 
-    UserId:
-      name: userId
+    ShareLinkId:
+      name: shareLinkId
       in: path
       required: true
+      description: Public sharing-link UUID
       schema:
         type: string
         format: uuid
+      example: 3dd32033-9e52-4310-8a7f-cae3728de165
+
+    ShareToken:
+      name: token
+      in: path
+      required: true
+      description: Secret token returned when the sharing link was created
+      schema:
+        type: string
+        minLength: 32
+        maxLength: 128
+      example: Q1rBCbOA8J6TTRg2xMuMi4Pq4RQ2EYo3t0O3H7czGOk
 
     SearchQuery:
       name: q
       in: query
       required: false
-      description: Free-text search across AI-generated objects, tags, and colors
+      description: Case-insensitive search across AI-generated objects, tags, and colors
       schema:
         type: string
         minLength: 1
@@ -431,23 +622,47 @@ components:
       name: size
       in: query
       required: false
-      description: Number of images per page, maximum 50
+      description: Number of images per page
       schema:
         type: integer
         minimum: 1
         maximum: 50
         default: 20
 
+  headers:
+    SessionCookie:
+      description: Opaque database-backed session cookie
+      schema:
+        type: string
+        example: SESSION=opaque-session-id; Path=/; HttpOnly; SameSite=Lax
+
+    ContentDisposition:
+      description: Inline content disposition with the sanitized filename
+      schema:
+        type: string
+        example: inline; filename="image.webp"
+
+    NoSniff:
+      description: Prevents browser content-type sniffing
+      schema:
+        type: string
+        enum:
+          - nosniff
+
   schemas:
     RegisterRequest:
       type: object
-      required: [name, email, password]
+      additionalProperties: false
+      required:
+        - name
+        - email
+        - password
       properties:
         name:
           type: string
-          minLength: 2
-          maxLength: 255
-          example: Shadi
+          minLength: 3
+          maxLength: 100
+          example: Shadi Moon
         email:
           type: string
           format: email
@@ -458,70 +673,141 @@ components:
           format: password
           minLength: 8
           maxLength: 72
-          example: StrongPassword123!
+          writeOnly: true
+          example: password123
 
     LoginRequest:
       type: object
-      required: [email, password]
+      additionalProperties: false
+      required:
+        - email
+        - password
       properties:
         email:
           type: string
           format: email
+          maxLength: 255
           example: shadi@example.com
         password:
           type: string
           format: password
-          example: StrongPassword123!
+          minLength: 8
+          maxLength: 72
+          writeOnly: true
+          example: password123
 
-    AuthenticatedUser:
+    AuthenticatedUserResponse:
       type: object
-      required: [id, name, email, createdAt]
+      additionalProperties: false
+      required:
+        - id
+        - name
+        - email
+        - createdAt
       properties:
-        id: {type: string, format: uuid}
-        name: {type: string, example: Shadi}
-        email: {type: string, format: email, example: shadi@example.com}
-        createdAt: {type: string, format: date-time}
+        id:
+          type: string
+          format: uuid
+          description: Public user UUID
+          example: a70d9fd5-78be-467d-8057-2680ca29e793
+        name:
+          type: string
+          example: Shadi Moon
+        email:
+          type: string
+          format: email
+          example: shadi@example.com
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-07-24T12:00:00Z"
 
-    PublicUser:
+    CsrfTokenResponse:
       type: object
-      required: [id, name]
+      additionalProperties: false
+      required:
+        - token
+        - headerName
+        - parameterName
       properties:
-        id: {type: string, format: uuid}
-        name: {type: string, example: Shadi}
-
-    UpdateImageVisibilityRequest:
-      type: object
-      required: [isPublic]
-      properties:
-        isPublic:
-          type: boolean
-          example: true
+        token:
+          type: string
+          example: c1f09496-9505-46d4-a0ca-dda01a5fa464
+        headerName:
+          type: string
+          example: X-CSRF-TOKEN
+        parameterName:
+          type: string
+          example: _csrf
 
     ImageTags:
       type: object
-      required: [objects, tags, colors]
+      additionalProperties: false
+      required:
+        - objects
+        - tags
+        - colors
       properties:
         objects:
           type: array
-          items: {type: string}
-          example: [dog, tree]
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+          example:
+            - ocean
+            - cloud
         tags:
           type: array
-          items: {type: string}
-          example: [outdoor, daytime, playful]
+          maxItems: 10
+          uniqueItems: true
+          items:
+            type: string
+            minLength: 1
+          example:
+            - sunset
+            - nature
+            - evening
         colors:
           type: array
           maxItems: 3
+          uniqueItems: true
           items:
-            type: string
-            enum: [black, white, red, green, yellow, blue, brown, orange, pink, purple, gray]
-          example: [brown, green, blue]
+            $ref: "#/components/schemas/ImageColor"
+          example:
+            - ORANGE
+            - BLUE
+            - PURPLE
+
+    ImageColor:
+      type: string
+      enum:
+        - BLACK
+        - WHITE
+        - RED
+        - GREEN
+        - YELLOW
+        - BLUE
+        - BROWN
+        - ORANGE
+        - PINK
+        - PURPLE
+        - GRAY
+
+    TaggingStatus:
+      type: string
+      enum:
+        - PENDING
+        - PROCESSING
+        - COMPLETED
+        - FAILED
 
     ImageResponse:
       type: object
+      additionalProperties: false
       required:
         - id
-        - owner
         - originalFilename
         - contentType
         - sizeBytes
@@ -530,103 +816,390 @@ components:
         - isPublic
         - taggingStatus
         - contentUrl
+        - thumbnailUrl
         - createdAt
       properties:
-        id: {type: string, format: uuid}
-        owner:
-          $ref: '#/components/schemas/PublicUser'
-        originalFilename: {type: string, example: beach-sunset.jpg}
-        contentType: {type: string, example: image/jpeg}
-        sizeBytes: {type: integer, format: int64, example: 2485190}
-        width: {type: integer, example: 1920}
-        height: {type: integer, example: 1080}
-        isPublic: {type: boolean, example: true}
-        aiTags:
-          allOf:
-            - $ref: '#/components/schemas/ImageTags'
-          nullable: true
-        taggingStatus:
+        id:
           type: string
-          enum: [PENDING, PROCESSING, COMPLETED, FAILED]
-          example: COMPLETED
+          format: uuid
+          description: Public image UUID
+          example: c98237ef-192c-4fd5-b2e4-7e0bd5a68253
+        originalFilename:
+          type: string
+          maxLength: 255
+          example: sunset.webp
+        contentType:
+          type: string
+          enum:
+            - image/jpeg
+            - image/png
+            - image/webp
+          example: image/webp
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 10485760
+          example: 284391
+        width:
+          type: integer
+          minimum: 1
+          example: 1920
+        height:
+          type: integer
+          minimum: 1
+          example: 1080
+        isPublic:
+          type: boolean
+          example: false
+        aiTags:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ImageTags"
+        taggingStatus:
+          $ref: "#/components/schemas/TaggingStatus"
+        taggingStartedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-07-24T12:00:01Z"
+        taggingCompletedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2026-07-24T12:00:04Z"
+        taggingDurationMs:
+          type: integer
+          format: int64
+          minimum: 0
+          nullable: true
+          example: 3000
+        taggingError:
+          type: string
+          nullable: true
+          description: Sanitized processing failure information
+          example: null
         contentUrl:
           type: string
-          example: /api/v1/images/550e8400-e29b-41d4-a716-446655440000/content
+          example: /api/v1/images/c98237ef-192c-4fd5-b2e4-7e0bd5a68253/content
         thumbnailUrl:
           type: string
+          example: /api/v1/images/c98237ef-192c-4fd5-b2e4-7e0bd5a68253/thumbnail
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-07-24T12:00:00Z"
+        updatedAt:
+          type: string
+          format: date-time
           nullable: true
-          example: /api/v1/images/550e8400-e29b-41d4-a716-446655440000/thumbnail
-        createdAt: {type: string, format: date-time}
-        updatedAt: {type: string, format: date-time, nullable: true}
+          example: "2026-07-24T12:00:04Z"
 
-    ImagePage:
+    ImagePageResponse:
       type: object
-      required: [items, page, size, totalElements, totalPages]
+      additionalProperties: false
+      required:
+        - images
+        - page
+        - size
+        - totalElements
+        - totalPages
       properties:
-        items:
+        images:
           type: array
           items:
-            $ref: '#/components/schemas/ImageResponse'
-        page: {type: integer, minimum: 0, example: 0}
-        size: {type: integer, minimum: 1, maximum: 50, example: 20}
-        totalElements: {type: integer, format: int64, minimum: 0, example: 42}
-        totalPages: {type: integer, minimum: 0, example: 3}
+            $ref: "#/components/schemas/ImageResponse"
+        page:
+          type: integer
+          minimum: 0
+          example: 0
+        size:
+          type: integer
+          minimum: 1
+          maximum: 50
+          example: 20
+        totalElements:
+          type: integer
+          format: int64
+          minimum: 0
+          example: 42
+        totalPages:
+          type: integer
+          minimum: 0
+          example: 3
 
-    PublicUserGalleryResponse:
+    UpdateImageVisibilityRequest:
       type: object
-      required: [user, images]
+      additionalProperties: false
+      required:
+        - isPublic
       properties:
-        user:
-          $ref: '#/components/schemas/PublicUser'
-        images:
-          $ref: '#/components/schemas/ImagePage'
+        isPublic:
+          type: boolean
+          example: true
 
-    ValidationError:
+    ShareExpiration:
+      type: string
+      enum:
+        - ONE_HOUR
+        - ONE_DAY
+        - SEVEN_DAYS
+
+    CreateShareLinkRequest:
       type: object
-      required: [field, message]
+      additionalProperties: false
+      required:
+        - expiration
       properties:
-        field: {type: string, example: email}
-        message: {type: string, example: must be a valid email address}
+        expiration:
+          $ref: "#/components/schemas/ShareExpiration"
+
+    ShareLinkCreatedResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - imageId
+        - shareUrl
+        - expiresAt
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3dd32033-9e52-4310-8a7f-cae3728de165
+        imageId:
+          type: string
+          format: uuid
+          example: c98237ef-192c-4fd5-b2e4-7e0bd5a68253
+        shareUrl:
+          type: string
+          description: Returned only when the sharing link is created
+          example: /api/v1/shares/Q1rBCbOA8J6TTRg2xMuMi4Pq4RQ2EYo3t0O3H7czGOk
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2026-07-25T12:00:00Z"
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-07-24T12:00:00Z"
+
+    ShareLinkResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - id
+        - imageId
+        - expiresAt
+        - active
+        - createdAt
+      properties:
+        id:
+          type: string
+          format: uuid
+          example: 3dd32033-9e52-4310-8a7f-cae3728de165
+        imageId:
+          type: string
+          format: uuid
+          example: c98237ef-192c-4fd5-b2e4-7e0bd5a68253
+        expiresAt:
+          type: string
+          format: date-time
+          example: "2026-07-25T12:00:00Z"
+        revokedAt:
+          type: string
+          format: date-time
+          nullable: true
+          example: null
+        active:
+          type: boolean
+          example: true
+        createdAt:
+          type: string
+          format: date-time
+          example: "2026-07-24T12:00:00Z"
+
+    ShareLinkListResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - shareLinks
+      properties:
+        shareLinks:
+          type: array
+          items:
+            $ref: "#/components/schemas/ShareLinkResponse"
+
+    SharedImageResponse:
+      type: object
+      additionalProperties: false
+      required:
+        - originalFilename
+        - contentType
+        - sizeBytes
+        - width
+        - height
+        - taggingStatus
+        - contentUrl
+        - thumbnailUrl
+      properties:
+        originalFilename:
+          type: string
+          example: private-image.webp
+        contentType:
+          type: string
+          enum:
+            - image/jpeg
+            - image/png
+            - image/webp
+        sizeBytes:
+          type: integer
+          format: int64
+          minimum: 1
+          maximum: 10485760
+          example: 284391
+        width:
+          type: integer
+          minimum: 1
+          example: 1920
+        height:
+          type: integer
+          minimum: 1
+          example: 1080
+        aiTags:
+          nullable: true
+          allOf:
+            - $ref: "#/components/schemas/ImageTags"
+        taggingStatus:
+          $ref: "#/components/schemas/TaggingStatus"
+        contentUrl:
+          type: string
+          example: /api/v1/shares/Q1rBCbOA8J6TTRg2xMuMi4Pq4RQ2EYo3t0O3H7czGOk/content
+        thumbnailUrl:
+          type: string
+          example: /api/v1/shares/Q1rBCbOA8J6TTRg2xMuMi4Pq4RQ2EYo3t0O3H7czGOk/thumbnail
 
     ErrorResponse:
       type: object
-      required: [timestamp, status, error, message, path]
+      additionalProperties: false
+      required:
+        - timestamp
+        - status
+        - error
+        - message
+        - path
+        - requestId
       properties:
-        timestamp: {type: string, format: date-time}
-        status: {type: integer, example: 400}
-        error: {type: string, example: Bad Request}
-        message: {type: string, example: Request validation failed}
-        path: {type: string, example: /api/v1/auth/register}
-        validationErrors:
-          type: array
-          items:
-            $ref: '#/components/schemas/ValidationError'
+        timestamp:
+          type: string
+          format: date-time
+          example: "2026-07-24T12:00:00Z"
+        status:
+          type: integer
+          example: 400
+        error:
+          type: string
+          example: Bad Request
+        message:
+          type: string
+          example: Request validation failed
+        path:
+          type: string
+          example: /api/v1/images
+        requestId:
+          type: string
+          format: uuid
+          example: 4a97c102-869b-4bb4-a648-d842ff73016d
 
   responses:
     BadRequest:
-      description: Invalid request
+      description: Request validation failed
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            timestamp: "2026-07-24T12:00:00Z"
+            status: 400
+            error: Bad Request
+            message: Request validation failed
+            path: /api/v1/images
+            requestId: 4a97c102-869b-4bb4-a648-d842ff73016d
+
+    InvalidImage:
+      description: Image is missing, empty, corrupt, or otherwise invalid
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
 
     Unauthorized:
-      description: Authentication is required or the session has expired
+      description: Authentication is required
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
+
+    InvalidCredentials:
+      description: Email or password is incorrect
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
 
     Forbidden:
-      description: The authenticated user does not own this resource
+      description: The request is not allowed or the CSRF token is invalid
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
 
-    NotFound:
-      description: Requested resource was not found
+    ImageNotFound:
+      description: Image does not exist or is not accessible
       content:
         application/json:
           schema:
-            $ref: '#/components/schemas/ErrorResponse'
+            $ref: "#/components/schemas/ErrorResponse"
+
+    ShareLinkNotFound:
+      description: Sharing link does not exist or is not accessible
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    SharedImageNotFound:
+      description: Sharing token is invalid, expired, revoked, or inaccessible
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    EmailConflict:
+      description: Email is already registered
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    PublicImageShareConflict:
+      description: Temporary sharing links can only be created for private images
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    PayloadTooLarge:
+      description: Image exceeds the 10 MB limit
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+
+    UnsupportedImageType:
+      description: Only JPEG, PNG, and WebP images are supported
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
