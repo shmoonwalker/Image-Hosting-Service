@@ -11,12 +11,19 @@ spring:
     hikari:
       maximum-pool-size: ${DB_MAX_POOL_SIZE:10}
       minimum-idle: ${DB_MIN_IDLE:2}
-      connection-timeout: 30s
-      validation-timeout: 5s
+      connection-timeout: 30000
+      validation-timeout: 5000
 
   session:
     jdbc:
       initialize-schema: always
+
+  web:
+    error:
+      include-message: never
+      include-binding-errors: never
+      include-stacktrace: never
+      include-exception: false
 
 server:
   port: ${PORT:8080}
@@ -31,12 +38,6 @@ server:
         http-only: true
         secure: true
         same-site: lax
-
-  error:
-    include-message: never
-    include-binding-errors: never
-    include-stacktrace: never
-    include-exception: false
 
 object-storage:
   endpoint: ${OBJECT_STORAGE_ENDPOINT}
