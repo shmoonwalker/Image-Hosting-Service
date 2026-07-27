@@ -19,6 +19,9 @@ Users can upload and manage images that are private by default. Images are store
 - Expiring and revocable private sharing links
 - Owner-only image deletion
 - Interactive Swagger API documentation
+- Application logging for important business operations
+- Centralized log shipping to Grafana Cloud Loki
+- Application health, liveness, and readiness monitoring
 
 ## Technology
 
@@ -27,11 +30,15 @@ Users can upload and manage images that are private by default. Images are store
 - Spring Security
 - Spring Session JDBC
 - Spring JDBC
+- Spring Boot Actuator
 - PostgreSQL
 - Flyway
 - Cloudflare R2
 - Google Gemini
 - Thumbnailator
+- SLF4J and Logback
+- Loki4j Logback Appender
+- Grafana Cloud Loki
 - Maven
 - Docker
 - Railway
@@ -77,6 +84,19 @@ Configuration is supplied through environment variables. Secrets must never be c
 | `GEMINI_API_KEY` | Google Gemini API key |
 | `PORT` | HTTP port, defaults to `8080` |
 
+### Observability configuration
+
+The following variables are required only when the `loki` profile is active:
+
+| Variable | Description |
+| --- | --- |
+| `LOKI_URL` | Grafana Cloud Loki base URL |
+| `LOKI_USERNAME` | Grafana Cloud Loki username or tenant ID |
+| `LOKI_API_TOKEN` | Grafana Cloud token with `logs:write` permission |
+| `ENVIRONMENT` | Environment label, such as `development` or `production` |
+
+The Loki API token is a secret. It must never be committed to the repository or included in application logs.
+
 ## Application profiles
 
 The application uses separate Spring profiles:
@@ -84,11 +104,25 @@ The application uses separate Spring profiles:
 - `dev` for local development
 - `test` for automated tests
 - `prod` for Railway deployment
+- `loki` for shipping logs to Grafana Cloud Loki
 
 Start the development profile with:
 
 ```bash
 SPRING_PROFILES_ACTIVE=dev ./mvnw spring-boot:run
+```
+
+Start local development with Grafana Loki log shipping with:
+
+```bash
+SPRING_PROFILES_ACTIVE=dev,loki ./mvnw spring-boot:run
+```
+
+For production log shipping, use:
+
+```text
+SPRING_PROFILES_ACTIVE=prod,loki
+ENVIRONMENT=production
 ```
 
 ## API
@@ -119,6 +153,123 @@ OpenAPI YAML: http://localhost:8080/v3/api-docs.yaml
 ```
 
 Authentication uses an opaque `SESSION` cookie. Authenticated state-changing operations also require CSRF protection.
+
+## Observability
+
+Observability makes it possible to understand the application’s behavior while it is running.
+
+The project currently uses application logs and health checks.
+
+### Application logging
+
+The application records important business events, including:
+
+- User registration
+- Successful authentication
+- Failed authentication attempts
+- Image uploads
+- Image visibility changes
+- Image deletion
+- Image-tagging start, completion, skipping, and failure
+
+The application uses standard log levels:
+
+- `DEBUG` for detailed development information
+- `INFO` for normal business operations
+- `WARN` for suspicious or recoverable situations
+- `ERROR` for unexpected failures
+
+Sensitive information must never be logged, including:
+
+- Passwords and password hashes
+- Session identifiers
+- CSRF tokens
+- API keys
+- Grafana tokens
+- Storage credentials
+- Private storage object keys
+
+### Grafana Cloud Loki
+
+When the `loki` profile is active, the Loki4j Logback appender sends application logs to Grafana Cloud Loki.
+
+```text
+Spring Boot application
+    |
+    v
+SLF4J and Logback
+    |
+    v
+Loki4j Logback Appender
+    |
+    v
+Grafana Cloud Loki
+    |
+    v
+Grafana Explore
+```
+
+Logs continue to appear in the application console while also being shipped to Loki.
+
+The following Loki labels are attached to logs:
+
+- `app`
+- `env`
+- `level`
+
+The thread and logger names are stored as structured metadata.
+
+Example LogQL query for development logs:
+
+```logql
+{app="image-hosting-service", env="development"}
+```
+
+Example LogQL query for production logs:
+
+```logql
+{app="image-hosting-service", env="production"}
+```
+
+Example query for application errors:
+
+```logql
+{app="image-hosting-service", level="ERROR"}
+```
+
+Example query for failed authentication attempts:
+
+```logql
+{app="image-hosting-service"} |= "Authentication failed"
+```
+
+### Health checks
+
+Spring Boot Actuator provides the application health endpoint:
+
+```text
+GET /actuator/health
+```
+
+Local health URL:
+
+```text
+http://localhost:8080/actuator/health
+```
+
+A healthy application returns:
+
+```json
+{
+  "status": "UP"
+}
+```
+
+The health system can check application availability, database connectivity, disk space, liveness, and readiness.
+
+Detailed health information is available during local development. Production responses hide internal details for security.
+
+Application metrics are not currently exposed publicly.
 
 ## Testing
 
@@ -155,11 +306,34 @@ docker run --rm -p 8080:8080 \
   image-hosting-service
 ```
 
+To run the container with Grafana Loki log shipping:
+
+```bash
+docker run --rm -p 8080:8080 \
+  -e SPRING_PROFILES_ACTIVE=prod,loki \
+  -e ENVIRONMENT=production \
+  -e DB_URL \
+  -e DB_USER \
+  -e DB_PASSWORD \
+  -e OBJECT_STORAGE_ENDPOINT \
+  -e OBJECT_STORAGE_REGION \
+  -e OBJECT_STORAGE_ACCESS_KEY_ID \
+  -e OBJECT_STORAGE_SECRET_ACCESS_KEY \
+  -e OBJECT_STORAGE_BUCKET \
+  -e GEMINI_API_KEY \
+  -e LOKI_URL \
+  -e LOKI_USERNAME \
+  -e LOKI_API_TOKEN \
+  image-hosting-service
+```
+
 ## Deployment
 
 The backend and PostgreSQL database are designed for deployment on Railway. Original images and thumbnails remain in a private Cloudflare R2 bucket.
 
 Railway-specific configuration is kept outside the application’s business logic so the Docker image can later be moved to another hosting provider.
+
+For production log shipping, the Railway service uses the `prod,loki` profiles and sends application logs to Grafana Cloud Loki.
 
 ## Security
 

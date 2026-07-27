@@ -1,0 +1,81 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<configuration>
+    <include resource="org/springframework/boot/logging/logback/defaults.xml"/>
+    <include resource="org/springframework/boot/logging/logback/console-appender.xml"/>
+
+    <springProperty
+            scope="context"
+            name="applicationName"
+            source="spring.application.name"
+            defaultValue="image-hosting-service"
+    />
+
+    <springProfile name="!loki">
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+        </root>
+    </springProfile>
+
+    <springProfile name="loki">
+        <springProperty
+                scope="context"
+                name="lokiUrl"
+                source="loki.url"
+        />
+        <springProperty
+                scope="context"
+                name="lokiUsername"
+                source="loki.username"
+        />
+        <springProperty
+                scope="context"
+                name="lokiApiToken"
+                source="loki.api-token"
+        />
+        <springProperty
+                scope="context"
+                name="environment"
+                source="environment"
+                defaultValue="development"
+        />
+
+        <appender
+                name="LOKI"
+                class="com.github.loki4j.logback.Loki4jAppender"
+        >
+            <labels>
+                app=${applicationName}
+                env=${environment}
+                level=%level
+            </labels>
+
+            <structuredMetadata>
+                thread=%thread
+                logger=%logger
+            </structuredMetadata>
+
+            <message>
+                <pattern>%msg%n%ex</pattern>
+            </message>
+
+            <http>
+                <url>${lokiUrl}/loki/api/v1/push</url>
+                <auth>
+                    <username>${lokiUsername}</username>
+                    <password>${lokiApiToken}</password>
+                </auth>
+                <requestTimeoutMs>15000</requestTimeoutMs>
+            </http>
+
+            <batch>
+                <maxBytes>65536</maxBytes>
+                <timeoutMs>10000</timeoutMs>
+            </batch>
+        </appender>
+
+        <root level="INFO">
+            <appender-ref ref="CONSOLE"/>
+            <appender-ref ref="LOKI"/>
+        </root>
+    </springProfile>
+</configuration>

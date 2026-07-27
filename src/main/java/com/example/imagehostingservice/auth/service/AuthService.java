@@ -16,9 +16,11 @@ import org.springframework.security.core.AuthenticationException;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
+import lombok.extern.slf4j.Slf4j;
 
 import java.util.Locale;
 
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class AuthService {
@@ -41,6 +43,10 @@ public class AuthService {
                 email,
                 passwordHash
         );
+        log.info(
+                "User registered userId={}",
+                createdUser.id()
+        );
 
         return new AuthenticatedUserResponse(
                 createdUser.id(),
@@ -62,13 +68,22 @@ public class AuthService {
                     )
             );
         } catch (AuthenticationException exception) {
-            throw new InvalidCredentialsException("Invalid email or password");
+            log.warn("Authentication failed");
+
+            throw new InvalidCredentialsException(
+                    "Invalid email or password"
+            );
         }
         SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
         securityContext.setAuthentication(authentication);
         SecurityContextHolder.setContext(securityContext);
         User user = userRepository.findByEmail(email)
-                .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password"));
+                .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password")
+                );
+        log.info(
+                "User authenticated userId={}",
+                user.id()
+        );
 
 
         return new AuthenticatedUserResponse(
