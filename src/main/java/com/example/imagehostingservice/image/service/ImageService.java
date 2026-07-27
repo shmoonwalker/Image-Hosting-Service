@@ -16,12 +16,13 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
 import com.example.imagehostingservice.image.validation.ImageFileValidator;
 import com.example.imagehostingservice.image.validation.ValidatedImage;
+import lombok.extern.slf4j.Slf4j;
 
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.List;
 
-
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class ImageService {
@@ -67,6 +68,13 @@ public class ImageService {
                 validatedImage.sizeBytes(),
                 validatedImage.width(),
                 validatedImage.height()
+        );
+        log.info(
+                "Image uploaded imageId={} userId={} contentType={} sizeBytes={}",
+                savedImage.id(),
+                savedImage.ownerId(),
+                savedImage.contentType(),
+                savedImage.sizeBytes()
         );
         imageTaggingDispatcher.dispatch(savedImage.id());
 
@@ -179,6 +187,12 @@ public class ImageService {
                         isPublic
                 )
                 .orElseThrow(ImageNotFoundException::new);
+        log.info(
+                "Image visibility changed imageId={} userId={} public={}",
+                updatedImage.id(),
+                updatedImage.ownerId(),
+                updatedImage.isPublic()
+        );
 
         return new ImageResponse(
                 updatedImage.id(),
@@ -345,6 +359,11 @@ public class ImageService {
         if (!deleted) {
             throw new ImageNotFoundException();
         }
+        log.info(
+                "Image deleted imageId={} userId={}",
+                imageId,
+                owner.id()
+        );
     }
 
 }

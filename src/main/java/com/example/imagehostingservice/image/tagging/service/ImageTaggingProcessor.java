@@ -27,11 +27,15 @@ public class ImageTaggingProcessor {
 
         if (!claimed) {
             log.debug(
-                    "Skipping image {} because it is not pending",
+                    "Image tagging skipped imageId={} reason=not-pending",
                     imageId
             );
             return;
         }
+        log.info(
+                "Image tagging started imageId={}",
+                imageId
+        );
 
         try {
             Image image = imageRepository.findById(imageId)
@@ -63,12 +67,19 @@ public class ImageTaggingProcessor {
                                 + imageId
                 );
             }
-        } catch (RuntimeException exception) {
-            taggingRepository.markFailed(imageId);
 
-            throw new ImageTaggingException(
-                    "Image tagging failed for image "
-                            + imageId,
+            log.info(
+                    "Image tagging completed imageId={}",
+                    imageId
+            );
+        } catch (RuntimeException exception) {
+            boolean markedFailed =
+                    taggingRepository.markFailed(imageId);
+
+            log.error(
+                    "Image tagging failed imageId={} markedFailed={}",
+                    imageId,
+                    markedFailed,
                     exception
             );
         }

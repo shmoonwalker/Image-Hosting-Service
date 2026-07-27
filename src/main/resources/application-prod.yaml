@@ -55,16 +55,6 @@ logging:
     root: INFO
     com.example.imagehostingservice: INFO
 
-  structured:
-    format:
-      console: ecs
-
-    ecs:
-      service:
-        name: image-hosting-service
-        version: ${APP_VERSION:unknown}
-        environment: production
-
 management:
   endpoints:
     web:
