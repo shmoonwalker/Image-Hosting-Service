@@ -3,6 +3,7 @@ package com.example.imagehostingservice.image.controller;
 import com.example.imagehostingservice.image.dto.ImagePageResponse;
 import com.example.imagehostingservice.image.dto.ImageResponse;
 import com.example.imagehostingservice.image.dto.UpdateImageVisibilityRequest;
+import com.example.imagehostingservice.image.model.TaggingStatus;
 import com.example.imagehostingservice.image.service.ImageService;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.Max;
@@ -90,6 +91,17 @@ public class ImageController {
 
     @GetMapping
     public ResponseEntity<ImagePageResponse> getPublicImages(
+            @RequestParam(name = "q", required = false)
+            String query,
+
+            @RequestParam(required = false)
+            String contentType,
+
+            @RequestParam(required = false)
+            String color,
+
+            @RequestParam(required = false)
+            TaggingStatus taggingStatus,
             @RequestParam(defaultValue = "0")
             @Min(0)
             int page,
@@ -100,7 +112,14 @@ public class ImageController {
             int size
     ) {
         ImagePageResponse response =
-                imageService.getPublicImages(page, size);
+                imageService.getPublicImages(
+                        query,
+                        contentType,
+                        color,
+                        taggingStatus,
+                        page,
+                        size
+                );
 
         return ResponseEntity.ok(response);
     }
@@ -124,6 +143,21 @@ public class ImageController {
 
     @GetMapping("/mine")
     public ResponseEntity<ImagePageResponse> getMyImages(
+            @RequestParam(name = "q", required = false)
+            String query,
+
+            @RequestParam(required = false)
+            String contentType,
+
+            @RequestParam(required = false)
+            String color,
+
+            @RequestParam(required = false)
+            TaggingStatus taggingStatus,
+
+            @RequestParam(required = false)
+            Boolean isPublic,
+
             @RequestParam(defaultValue = "0")
             @Min(0)
             int page,
@@ -138,6 +172,11 @@ public class ImageController {
         ImagePageResponse response =
                 imageService.getMyImages(
                         authentication.getName(),
+                        query,
+                        contentType,
+                        color,
+                        taggingStatus,
+                        isPublic,
                         page,
                         size
                 );

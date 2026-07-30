@@ -16,9 +16,7 @@ public class ThumbnailGenerator {
     private static final int THUMBNAIL_SIZE = 100;
 
     public byte[] generate(MultipartFile file) {
-        String outputFormat = getOutputFormat(
-                file.getContentType()
-        );
+
 
         try (
                 InputStream inputStream = file.getInputStream();
@@ -31,7 +29,7 @@ public class ThumbnailGenerator {
                             THUMBNAIL_SIZE,
                             THUMBNAIL_SIZE
                     )
-                    .outputFormat(outputFormat)
+                    .outputFormat("png")
                     .toOutputStream(outputStream);
 
             return outputStream.toByteArray();
@@ -41,19 +39,6 @@ public class ThumbnailGenerator {
                     exception
             );
         }
-    }
 
-    private String getOutputFormat(String contentType) {
-        if ("image/jpeg".equals(contentType)) {
-            return "jpg";
-        }
-
-        if ("image/png".equals(contentType)) {
-            return "png";
-        }
-
-        throw new InvalidImageException(
-                "Unsupported thumbnail image format"
-        );
     }
 }

@@ -262,11 +262,15 @@ paths:
         Gallery and search clients should display thumbnailUrl. They should
         request contentUrl only after the user explicitly opens the full image.
 
-        When `q` is supplied, the query searches completed AI-generated
-        objects, tags, and colors. Private images are never included.
+        When `q` is supplied, the query searches AI-generated objects, tags,
+        and colors using case-insensitive partial matching. All supplied
+        filters are combined with AND. Private images are never included.
       operationId: getPublicImages
       parameters:
         - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/ContentTypeFilter"
+        - $ref: "#/components/parameters/ColorFilter"
+        - $ref: "#/components/parameters/TaggingStatusFilter"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Size"
       responses:
@@ -293,10 +297,18 @@ paths:
 
         Clients should display thumbnailUrl in the image library and request
         contentUrl only after the user explicitly opens the full image.
+
+        Search is limited to the authenticated user's images. All supplied
+        filters are combined with AND.
       operationId: getMyImages
       security:
         - sessionCookie: []
       parameters:
+        - $ref: "#/components/parameters/SearchQuery"
+        - $ref: "#/components/parameters/ContentTypeFilter"
+        - $ref: "#/components/parameters/ColorFilter"
+        - $ref: "#/components/parameters/TaggingStatusFilter"
+        - $ref: "#/components/parameters/VisibilityFilter"
         - $ref: "#/components/parameters/Page"
         - $ref: "#/components/parameters/Size"
       responses:
@@ -446,7 +458,8 @@ paths:
         - Images
       summary: Stream the image thumbnail
       description: |
-        Returns the generated 100 × 100 thumbnail.
+        Returns the generated 100 × 100 PNG thumbnail. Thumbnails are always
+        PNG regardless of whether the original image is JPEG, PNG, or WebP.
 
         This endpoint should be used when displaying public galleries, search
         results, and the authenticated user's image library.
@@ -468,15 +481,7 @@ paths:
             X-Content-Type-Options:
               $ref: "#/components/headers/NoSniff"
           content:
-            image/jpeg:
-              schema:
-                type: string
-                format: binary
             image/png:
-              schema:
-                type: string
-                format: binary
-            image/webp:
               schema:
                 type: string
                 format: binary
@@ -702,13 +707,55 @@ components:
       in: query
       required: false
       description: |
-        Optional case-insensitive search across completed AI-generated objects,
-        tags, and colors. Only public images are searched.
+        Optional case-insensitive partial search across AI-generated objects,
+        tags, and colors.
       schema:
         type: string
         minLength: 1
         maxLength: 100
       example: sunset
+
+    ContentTypeFilter:
+      name: contentType
+      in: query
+      required: false
+      description: Return only images with this original content type
+      schema:
+        type: string
+        enum:
+          - image/jpeg
+          - image/png
+          - image/webp
+      example: image/webp
+
+    ColorFilter:
+      name: color
+      in: query
+      required: false
+      description: Case-insensitive exact match against AI-detected colors
+      schema:
+        type: string
+        minLength: 1
+        maxLength: 100
+      example: orange
+
+    TaggingStatusFilter:
+      name: taggingStatus
+      in: query
+      required: false
+      description: Return only images with this AI-tagging status
+      schema:
+        $ref: "#/components/schemas/TaggingStatus"
+      example: COMPLETED
+
+    VisibilityFilter:
+      name: isPublic
+      in: query
+      required: false
+      description: Return only public or private images owned by the authenticated user
+      schema:
+        type: boolean
+      example: false
 
     Page:
       name: page

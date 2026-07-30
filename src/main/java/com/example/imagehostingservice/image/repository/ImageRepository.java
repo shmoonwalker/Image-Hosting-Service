@@ -173,9 +173,18 @@ public class ImageRepository {
 
     public List<Image> findAllByOwnerId(
             Long ownerId,
+            String query,
+            String contentType,
+            String color,
+            TaggingStatus taggingStatus,
+            Boolean isPublic,
             int limit,
             int offset
     ) {
+        String taggingStatusValue = taggingStatus == null
+                ? null
+                : taggingStatus.name();
+
         String sql = """
                 SELECT
                     id,
@@ -195,6 +204,42 @@ public class ImageRepository {
                     updated_at
                 FROM images
                 WHERE owner_id = ?
+                  AND (
+                      NULLIF(BTRIM(CAST(? AS text)), '') IS NULL
+                      OR EXISTS (
+                          SELECT 1
+                          FROM jsonb_array_elements_text(
+                              COALESCE(ai_tags -> 'objects', '[]'::jsonb) ||
+                              COALESCE(ai_tags -> 'tags', '[]'::jsonb) ||
+                              COALESCE(ai_tags -> 'colors', '[]'::jsonb)
+                          ) AS search_value(value)
+                          WHERE search_value.value ILIKE
+                                '%' || BTRIM(CAST(? AS text)) || '%'
+                      )
+                  )
+                  AND (
+                      CAST(? AS text) IS NULL
+                      OR content_type = ?
+                  )
+                  AND (
+                      NULLIF(BTRIM(CAST(? AS text)), '') IS NULL
+                      OR EXISTS (
+                          SELECT 1
+                          FROM jsonb_array_elements_text(
+                              COALESCE(ai_tags -> 'colors', '[]'::jsonb)
+                          ) AS detected_color(value)
+                          WHERE LOWER(detected_color.value) =
+                                LOWER(BTRIM(?))
+                      )
+                  )
+                  AND (
+                      CAST(? AS text) IS NULL
+                      OR tagging_status = CAST(? AS tagging_status)
+                  )
+                  AND (
+                      CAST(? AS boolean) IS NULL
+                      OR is_public = CAST(? AS boolean)
+                  )
                 ORDER BY created_at DESC, id DESC
                 LIMIT ?
                 OFFSET ?
@@ -204,12 +249,33 @@ public class ImageRepository {
                 sql,
                 imageRowMapper,
                 ownerId,
+                query,
+                query,
+                contentType,
+                contentType,
+                color,
+                color,
+                taggingStatusValue,
+                taggingStatusValue,
+                isPublic,
+                isPublic,
                 limit,
                 offset
         );
     }
 
-    public List<Image> findAllPublic(int limit, int offset) {
+    public List<Image> findAllPublic(
+            String query,
+            String contentType,
+            String color,
+            TaggingStatus taggingStatus,
+            int limit,
+            int offset
+    ) {
+        String taggingStatusValue = taggingStatus == null
+                ? null
+                : taggingStatus.name();
+
         String sql = """
                 SELECT
                     id,
@@ -229,6 +295,38 @@ public class ImageRepository {
                     updated_at
                 FROM images
                 WHERE is_public = true
+                  AND (
+                      NULLIF(BTRIM(CAST(? AS text)), '') IS NULL
+                      OR EXISTS (
+                          SELECT 1
+                          FROM jsonb_array_elements_text(
+                              COALESCE(ai_tags -> 'objects', '[]'::jsonb) ||
+                              COALESCE(ai_tags -> 'tags', '[]'::jsonb) ||
+                              COALESCE(ai_tags -> 'colors', '[]'::jsonb)
+                          ) AS search_value(value)
+                          WHERE search_value.value ILIKE
+                                '%' || BTRIM(CAST(? AS text)) || '%'
+                      )
+                  )
+                  AND (
+                      CAST(? AS text) IS NULL
+                      OR content_type = ?
+                  )
+                  AND (
+                      NULLIF(BTRIM(CAST(? AS text)), '') IS NULL
+                      OR EXISTS (
+                          SELECT 1
+                          FROM jsonb_array_elements_text(
+                              COALESCE(ai_tags -> 'colors', '[]'::jsonb)
+                          ) AS detected_color(value)
+                          WHERE LOWER(detected_color.value) =
+                                LOWER(BTRIM(?))
+                      )
+                  )
+                  AND (
+                      CAST(? AS text) IS NULL
+                      OR tagging_status = CAST(? AS tagging_status)
+                  )
                 ORDER BY created_at DESC, id DESC
                 LIMIT ?
                 OFFSET ?
@@ -237,21 +335,78 @@ public class ImageRepository {
         return jdbcTemplate.query(
                 sql,
                 imageRowMapper,
+                query,
+                query,
+                contentType,
+                contentType,
+                color,
+                color,
+                taggingStatusValue,
+                taggingStatusValue,
                 limit,
                 offset
         );
     }
 
-    public long countPublicImages() {
+    public long countPublicImages(
+            String query,
+            String contentType,
+            String color,
+            TaggingStatus taggingStatus
+    ) {
+        String taggingStatusValue = taggingStatus == null
+                ? null
+                : taggingStatus.name();
+
         String sql = """
                 SELECT COUNT(*)
                 FROM images
                 WHERE is_public = true
+                  AND (
+                      NULLIF(BTRIM(CAST(? AS text)), '') IS NULL
+                      OR EXISTS (
+                          SELECT 1
+                          FROM jsonb_array_elements_text(
+                              COALESCE(ai_tags -> 'objects', '[]'::jsonb) ||
+                              COALESCE(ai_tags -> 'tags', '[]'::jsonb) ||
+                              COALESCE(ai_tags -> 'colors', '[]'::jsonb)
+                          ) AS search_value(value)
+                          WHERE search_value.value ILIKE
+                                '%' || BTRIM(CAST(? AS text)) || '%'
+                      )
+                  )
+                  AND (
+                      CAST(? AS text) IS NULL
+                      OR content_type = ?
+                  )
+                  AND (
+                      NULLIF(BTRIM(CAST(? AS text)), '') IS NULL
+                      OR EXISTS (
+                          SELECT 1
+                          FROM jsonb_array_elements_text(
+                              COALESCE(ai_tags -> 'colors', '[]'::jsonb)
+                          ) AS detected_color(value)
+                          WHERE LOWER(detected_color.value) =
+                                LOWER(BTRIM(?))
+                      )
+                  )
+                  AND (
+                      CAST(? AS text) IS NULL
+                      OR tagging_status = CAST(? AS tagging_status)
+                  )
                 """;
 
         Long count = jdbcTemplate.queryForObject(
                 sql,
-                Long.class
+                Long.class,
+                query,
+                query,
+                contentType,
+                contentType,
+                color,
+                color,
+                taggingStatusValue,
+                taggingStatusValue
         );
 
         return count != null ? count : 0L;
@@ -296,17 +451,74 @@ public class ImageRepository {
         ).stream().findFirst();
     }
 
-    public long countByOwnerId(Long ownerId) {
+    public long countByOwnerId(
+            Long ownerId,
+            String query,
+            String contentType,
+            String color,
+            TaggingStatus taggingStatus,
+            Boolean isPublic
+    ) {
+        String taggingStatusValue = taggingStatus == null
+                ? null
+                : taggingStatus.name();
+
         String sql = """
                 SELECT COUNT(*)
                 FROM images
                 WHERE owner_id = ?
+                  AND (
+                      NULLIF(BTRIM(CAST(? AS text)), '') IS NULL
+                      OR EXISTS (
+                          SELECT 1
+                          FROM jsonb_array_elements_text(
+                              COALESCE(ai_tags -> 'objects', '[]'::jsonb) ||
+                              COALESCE(ai_tags -> 'tags', '[]'::jsonb) ||
+                              COALESCE(ai_tags -> 'colors', '[]'::jsonb)
+                          ) AS search_value(value)
+                          WHERE search_value.value ILIKE
+                                '%' || BTRIM(CAST(? AS text)) || '%'
+                      )
+                  )
+                  AND (
+                      CAST(? AS text) IS NULL
+                      OR content_type = ?
+                  )
+                  AND (
+                      NULLIF(BTRIM(CAST(? AS text)), '') IS NULL
+                      OR EXISTS (
+                          SELECT 1
+                          FROM jsonb_array_elements_text(
+                              COALESCE(ai_tags -> 'colors', '[]'::jsonb)
+                          ) AS detected_color(value)
+                          WHERE LOWER(detected_color.value) =
+                                LOWER(BTRIM(?))
+                      )
+                  )
+                  AND (
+                      CAST(? AS text) IS NULL
+                      OR tagging_status = CAST(? AS tagging_status)
+                  )
+                  AND (
+                      CAST(? AS boolean) IS NULL
+                      OR is_public = CAST(? AS boolean)
+                  )
                 """;
 
         Long count = jdbcTemplate.queryForObject(
                 sql,
                 Long.class,
-                ownerId
+                ownerId,
+                query,
+                query,
+                contentType,
+                contentType,
+                color,
+                color,
+                taggingStatusValue,
+                taggingStatusValue,
+                isPublic,
+                isPublic
         );
 
         return count != null ? count : 0L;

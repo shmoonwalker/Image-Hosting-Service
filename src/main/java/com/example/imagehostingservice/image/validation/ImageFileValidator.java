@@ -18,7 +18,8 @@ public class ImageFileValidator {
     private static final Set<String> ALLOWED_CONTENT_TYPES =
             Set.of(
                     "image/jpeg",
-                    "image/png"
+                    "image/png",
+                    "image/webp"
             );
 
     public ValidatedImage validate(MultipartFile file) {
@@ -39,7 +40,7 @@ public class ImageFileValidator {
         if (contentType == null ||
                 !ALLOWED_CONTENT_TYPES.contains(contentType)) {
             throw new InvalidImageException(
-                    "Only JPEG and PNG images are supported"
+                    "Only JPEG, PNG, and WebP images are supported"
             );
         }
 

@@ -5,6 +5,7 @@ import com.example.imagehostingservice.image.dto.ImageContent;
 import com.example.imagehostingservice.image.dto.ImagePageResponse;
 import com.example.imagehostingservice.image.dto.ImageResponse;
 import com.example.imagehostingservice.image.model.Image;
+import com.example.imagehostingservice.image.model.TaggingStatus;
 import com.example.imagehostingservice.image.repository.ImageRepository;
 import com.example.imagehostingservice.image.tagging.dispatch.ImageTaggingDispatcher;
 import com.example.imagehostingservice.image.thumbnail.ThumbnailGenerator;
@@ -57,7 +58,7 @@ public class ImageService {
         String thumbnailStorageKey =
                 objectStorageService.upload(
                         thumbnailBytes,
-                        validatedImage.contentType()
+                        "image/png"
                 );
 
         Image savedImage = imageRepository.save(
@@ -120,17 +121,34 @@ public class ImageService {
                 .orElse(false);
     }
 
-    public ImagePageResponse getPublicImages(int page, int size) {
+    public ImagePageResponse getPublicImages( String query,
+                                              String contentType,
+                                              String color,
+                                              TaggingStatus taggingStatus,
+                                              int page,
+                                              int size) {
         int offset = page * size;
 
         List<ImageResponse> images = imageRepository
-                .findAllPublic(size, offset)
+                .findAllPublic(
+                        query,
+                        contentType,
+                        color,
+                        taggingStatus,
+                        size,
+                        offset
+                )
                 .stream()
                 .map(this::toResponse)
                 .toList();
 
         long totalElements =
-                imageRepository.countPublicImages();
+                imageRepository.countPublicImages(
+                        query,
+                        contentType,
+                        color,
+                        taggingStatus
+                );
 
         int totalPages = (int) Math.ceil(
                 (double) totalElements / size
@@ -190,6 +208,11 @@ public class ImageService {
 
     public ImagePageResponse getMyImages(
             String ownerEmail,
+            String query,
+            String contentType,
+            String color,
+            TaggingStatus taggingStatus,
+            Boolean isPublic,
             int page,
             int size
     ) {
@@ -205,6 +228,11 @@ public class ImageService {
         List<ImageResponse> images = imageRepository
                 .findAllByOwnerId(
                         owner.id(),
+                        query,
+                        contentType,
+                        color,
+                        taggingStatus,
+                        isPublic,
                         size,
                         offset
                 )
@@ -213,7 +241,14 @@ public class ImageService {
                 .toList();
 
         long totalElements =
-                imageRepository.countByOwnerId(owner.id());
+                imageRepository.countByOwnerId(
+                        owner.id(),
+                        query,
+                        contentType,
+                        color,
+                        taggingStatus,
+                        isPublic
+                );
 
         int totalPages = (int) Math.ceil(
                 (double) totalElements / size
@@ -255,9 +290,9 @@ public class ImageService {
 
         return new ImageContent(
                 new ByteArrayInputStream(thumbnailBytes),
-                image.contentType(),
+                "image/png",
                 thumbnailBytes.length,
-                "thumbnail-" + image.originalFilename()
+                "thumbnail-" + image.publicId() + ".png"
         );
     }
 
