@@ -15,6 +15,7 @@ import java.sql.SQLException;
 import java.time.OffsetDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.UUID;
 
 @Repository
 @RequiredArgsConstructor
@@ -43,6 +44,7 @@ public class ImageRepository {
     private final RowMapper<Image> imageRowMapper = (rs, rowNum) ->
             new Image(
                     rs.getLong("id"),
+                    rs.getObject("public_id", UUID.class),
                     rs.getLong("owner_id"),
                     rs.getString("original_filename"),
                     rs.getString("original_storage_key"),
@@ -69,33 +71,34 @@ public class ImageRepository {
             Integer height
     ) {
         String sql = """
-            INSERT INTO images (
-                owner_id,
-                original_filename,
-                original_storage_key,
-                thumbnail_storage_key,
-                content_type,
-                size_bytes,
-                width,
-                height
-            )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            RETURNING
-                id,
-                owner_id,
-                original_filename,
-                original_storage_key,
-                thumbnail_storage_key,
-                content_type,
-                size_bytes,
-                width,
-                height,
-                is_public,
-                ai_tags,
-                tagging_status,
-                created_at,
-                updated_at
-            """;
+                INSERT INTO images (
+                    owner_id,
+                    original_filename,
+                    original_storage_key,
+                    thumbnail_storage_key,
+                    content_type,
+                    size_bytes,
+                    width,
+                    height
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                RETURNING
+                    id,
+                    public_id,
+                    owner_id,
+                    original_filename,
+                    original_storage_key,
+                    thumbnail_storage_key,
+                    content_type,
+                    size_bytes,
+                    width,
+                    height,
+                    is_public,
+                    ai_tags,
+                    tagging_status,
+                    created_at,
+                    updated_at
+                """;
 
         return jdbcTemplate.queryForObject(
                 sql,
@@ -115,6 +118,7 @@ public class ImageRepository {
         String sql = """
                 SELECT
                     id,
+                    public_id,
                     owner_id,
                     original_filename,
                     original_storage_key,
@@ -138,15 +142,11 @@ public class ImageRepository {
                 imageId
         ).stream().findFirst();
     }
-
-    public List<Image> findAllByOwnerId(
-            Long ownerId,
-            int limit,
-            int offset
-    ) {
+    public Optional<Image> findByPublicId(UUID publicId) {
         String sql = """
             SELECT
                 id,
+                public_id,
                 owner_id,
                 original_filename,
                 original_storage_key,
@@ -161,11 +161,44 @@ public class ImageRepository {
                 created_at,
                 updated_at
             FROM images
-            WHERE owner_id = ?
-            ORDER BY created_at DESC, id DESC
-            LIMIT ?
-            OFFSET ?
+            WHERE public_id = ?
             """;
+
+        return jdbcTemplate.query(
+                sql,
+                imageRowMapper,
+                publicId
+        ).stream().findFirst();
+    }
+
+    public List<Image> findAllByOwnerId(
+            Long ownerId,
+            int limit,
+            int offset
+    ) {
+        String sql = """
+                SELECT
+                    id,
+                    public_id,
+                    owner_id,
+                    original_filename,
+                    original_storage_key,
+                    thumbnail_storage_key,
+                    content_type,
+                    size_bytes,
+                    width,
+                    height,
+                    is_public,
+                    ai_tags,
+                    tagging_status,
+                    created_at,
+                    updated_at
+                FROM images
+                WHERE owner_id = ?
+                ORDER BY created_at DESC, id DESC
+                LIMIT ?
+                OFFSET ?
+                """;
 
         return jdbcTemplate.query(
                 sql,
@@ -180,6 +213,7 @@ public class ImageRepository {
         String sql = """
                 SELECT
                     id,
+                    public_id,
                     owner_id,
                     original_filename,
                     original_storage_key,
@@ -223,8 +257,8 @@ public class ImageRepository {
         return count != null ? count : 0L;
     }
 
-    public Optional<Image> updateVisibility(
-            Long imageId,
+    public Optional<Image> updateVisibilityByPublicId(
+            UUID publicId,
             Long ownerId,
             boolean isPublic
     ) {
@@ -233,10 +267,11 @@ public class ImageRepository {
             SET
                 is_public = ?,
                 updated_at = now()
-            WHERE id = ?
+            WHERE public_id = ?
               AND owner_id = ?
             RETURNING
                 id,
+                public_id,
                 owner_id,
                 original_filename,
                 original_storage_key,
@@ -256,17 +291,17 @@ public class ImageRepository {
                 sql,
                 imageRowMapper,
                 isPublic,
-                imageId,
+                publicId,
                 ownerId
         ).stream().findFirst();
     }
 
     public long countByOwnerId(Long ownerId) {
         String sql = """
-            SELECT COUNT(*)
-            FROM images
-            WHERE owner_id = ?
-            """;
+                SELECT COUNT(*)
+                FROM images
+                WHERE owner_id = ?
+                """;
 
         Long count = jdbcTemplate.queryForObject(
                 sql,
@@ -277,19 +312,19 @@ public class ImageRepository {
         return count != null ? count : 0L;
     }
 
-    public boolean deleteByIdAndOwnerId(
-            Long imageId,
+    public boolean deleteByPublicIdAndOwnerId(
+            UUID publicId,
             Long ownerId
     ) {
         String sql = """
-            DELETE FROM images
-            WHERE id = ?
-              AND owner_id = ?
-            """;
+                DELETE FROM images
+                WHERE public_id = ?
+                  AND owner_id = ?
+                """;
 
         int deletedRows = jdbcTemplate.update(
                 sql,
-                imageId,
+                publicId,
                 ownerId
         );
 

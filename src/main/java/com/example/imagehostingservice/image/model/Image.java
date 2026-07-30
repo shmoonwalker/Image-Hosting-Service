@@ -1,9 +1,11 @@
 package com.example.imagehostingservice.image.model;
 
 import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public record Image(
         Long id,
+        UUID publicId,
         Long ownerId,
         String originalFilename,
         String originalStorageKey,

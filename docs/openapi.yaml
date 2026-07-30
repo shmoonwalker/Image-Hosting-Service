@@ -1,6 +1,5 @@
 openapi: 3.1.0
 
-
 info:
   title: Image Hosting Service API
   version: 1.0.0
@@ -157,6 +156,9 @@ paths:
 
         Every uploaded image is private by default. Thumbnail generation is
         completed during upload, and Gemini analysis continues asynchronously.
+
+        The response contains image metadata and relative thumbnail and content
+        URLs. It does not contain image bytes.
       operationId: uploadImage
       security:
         - sessionCookie: []
@@ -200,6 +202,12 @@ paths:
       description: |
         Returns public images from newest to oldest.
 
+        Each item uses ImageResponse and contains image metadata plus relative
+        thumbnail and content URLs. The response does not contain image bytes.
+
+        Gallery and search clients should display thumbnailUrl. They should
+        request contentUrl only after the user explicitly opens the full image.
+
         When `q` is supplied, the query searches completed AI-generated
         objects, tags, and colors. Private images are never included.
       operationId: getPublicImages
@@ -209,7 +217,7 @@ paths:
         - $ref: "#/components/parameters/Size"
       responses:
         "200":
-          description: Page of public images
+          description: Page of public image metadata with thumbnail and content URLs
           content:
             application/json:
               schema:
@@ -222,7 +230,15 @@ paths:
       tags:
         - Images
       summary: List owned images
-      description: Returns public and private images owned by the authenticated user.
+      description: |
+        Returns public and private images owned by the authenticated user from
+        newest to oldest.
+
+        Each item uses ImageResponse and contains image metadata plus relative
+        thumbnail and content URLs. The response does not contain image bytes.
+
+        Clients should display thumbnailUrl in the image library and request
+        contentUrl only after the user explicitly opens the full image.
       operationId: getMyImages
       security:
         - sessionCookie: []
@@ -231,7 +247,7 @@ paths:
         - $ref: "#/components/parameters/Size"
       responses:
         "200":
-          description: Page of owned images
+          description: Page of owned image metadata with thumbnail and content URLs
           content:
             application/json:
               schema:
@@ -249,14 +265,20 @@ paths:
       tags:
         - Images
       summary: Get image metadata
-      description: Public images are available to everyone. Private images are available only to their owner.
+      description: |
+        Returns metadata and relative content and thumbnail URLs for an
+        accessible image. This response does not contain image bytes.
+
+        Public images are available to everyone. Private images are available
+        only to their owner. An inaccessible private image is reported as not
+        found.
       operationId: getImage
       security:
         - {}
         - sessionCookie: []
       responses:
         "200":
-          description: Accessible image metadata
+          description: Accessible image metadata with thumbnail and content URLs
           content:
             application/json:
               schema:
@@ -268,7 +290,11 @@ paths:
       tags:
         - Images
       summary: Change image visibility
-      description: Makes an owned image public or private.
+      description: |
+        Makes an owned image public or private.
+
+        Only the image owner can change its visibility. The response contains
+        updated image metadata and relative image URLs.
       operationId: updateImageVisibility
       security:
         - sessionCookie: []
@@ -299,7 +325,9 @@ paths:
       tags:
         - Images
       summary: Delete an image
-      description: Deletes the image record, original object, thumbnail, and sharing links.
+      description: |
+        Permanently deletes an owned image, including its database record,
+        original object, thumbnail, and sharing links.
       operationId: deleteImage
       security:
         - sessionCookie: []
@@ -319,6 +347,15 @@ paths:
       tags:
         - Images
       summary: Stream the original image
+      description: |
+        Returns the original full-size image bytes.
+
+        Clients should request this endpoint only after the user explicitly
+        chooses to view the full image. Galleries, search results, and image
+        libraries should use the thumbnail endpoint instead.
+
+        Public images are available to everyone. Private images are available
+        only to their owner.
       operationId: getImageContent
       security:
         - {}
@@ -327,7 +364,7 @@ paths:
         - $ref: "#/components/parameters/ImageId"
       responses:
         "200":
-          description: Original image content
+          description: Original full-size image content
           headers:
             Content-Disposition:
               $ref: "#/components/headers/ContentDisposition"
@@ -354,7 +391,14 @@ paths:
       tags:
         - Images
       summary: Stream the image thumbnail
-      description: Returns the generated 100 × 100 thumbnail.
+      description: |
+        Returns the generated 100 × 100 thumbnail.
+
+        This endpoint should be used when displaying public galleries, search
+        results, and the authenticated user's image library.
+
+        Public-image thumbnails are available to everyone. Private-image
+        thumbnails are available only to their owner.
       operationId: getImageThumbnail
       security:
         - {}
@@ -363,7 +407,7 @@ paths:
         - $ref: "#/components/parameters/ImageId"
       responses:
         "200":
-          description: Thumbnail image content
+          description: Generated 100 × 100 thumbnail content
           headers:
             Content-Disposition:
               $ref: "#/components/headers/ContentDisposition"
@@ -570,7 +614,9 @@ components:
       name: imageId
       in: path
       required: true
-      description: Public image UUID
+      description: |
+        Stable public UUID of the image. The internal numeric database ID is
+        never exposed through the API.
       schema:
         type: string
         format: uuid
@@ -601,7 +647,9 @@ components:
       name: q
       in: query
       required: false
-      description: Case-insensitive search across AI-generated objects, tags, and colors
+      description: |
+        Optional case-insensitive search across completed AI-generated objects,
+        tags, and colors. Only public images are searched.
       schema:
         type: string
         minLength: 1
@@ -805,6 +853,16 @@ components:
 
     ImageResponse:
       type: object
+      description: |
+        Image metadata shared by upload, gallery, search, owner-library,
+        visibility-update, and individual-image responses.
+
+        The response contains relative API URLs. It does not contain thumbnail
+        or original image bytes.
+
+        Clients should use thumbnailUrl in galleries, search results, and image
+        libraries. Clients should request contentUrl only after the user
+        explicitly opens the full image.
       additionalProperties: false
       required:
         - id
@@ -822,12 +880,17 @@ components:
         id:
           type: string
           format: uuid
-          description: Public image UUID
+          description: |
+            Stable public image UUID. This is different from the internal
+            numeric database ID.
           example: c98237ef-192c-4fd5-b2e4-7e0bd5a68253
+
         originalFilename:
           type: string
           maxLength: 255
+          description: Sanitized original filename
           example: sunset.webp
+
         contentType:
           type: string
           enum:
@@ -835,56 +898,82 @@ components:
             - image/png
             - image/webp
           example: image/webp
+
         sizeBytes:
           type: integer
           format: int64
           minimum: 1
           maximum: 10485760
+          description: Original image size in bytes
           example: 284391
+
         width:
           type: integer
           minimum: 1
+          description: Original image width in pixels
           example: 1920
+
         height:
           type: integer
           minimum: 1
+          description: Original image height in pixels
           example: 1080
+
         isPublic:
           type: boolean
+          description: Whether the image can be accessed without authentication
           example: false
+
         aiTags:
+          description: AI-generated image metadata, or null while unavailable
           anyOf:
             - $ref: "#/components/schemas/ImageTags"
             - type: "null"
+
         taggingStatus:
           $ref: "#/components/schemas/TaggingStatus"
+
         taggingStartedAt:
           type: [string, "null"]
           format: date-time
           example: "2026-07-24T12:00:01Z"
+
         taggingCompletedAt:
           type: [string, "null"]
           format: date-time
           example: "2026-07-24T12:00:04Z"
+
         taggingDurationMs:
           type: [integer, "null"]
           format: int64
           minimum: 0
           example: 3000
+
         taggingError:
           type: [string, "null"]
           description: Sanitized processing failure information
           example: null
+
         contentUrl:
           type: string
+          description: |
+            Relative API URL for streaming the original full-size image.
+            Clients should request it only after the user explicitly opens
+            the image.
           example: /api/v1/images/c98237ef-192c-4fd5-b2e4-7e0bd5a68253/content
+
         thumbnailUrl:
           type: string
+          description: |
+            Relative API URL for the generated thumbnail. Clients should use
+            it in galleries, search results, and image-library lists.
           example: /api/v1/images/c98237ef-192c-4fd5-b2e4-7e0bd5a68253/thumbnail
+
         createdAt:
           type: string
           format: date-time
           example: "2026-07-24T12:00:00Z"
+
         updatedAt:
           type: [string, "null"]
           format: date-time
@@ -892,6 +981,12 @@ components:
 
     ImagePageResponse:
       type: object
+      description: |
+        Paginated image metadata used by the public gallery, search results,
+        and authenticated user's image library.
+
+        Each item uses ImageResponse and contains URLs only. Image bytes are
+        retrieved separately through the thumbnail or content endpoints.
       additionalProperties: false
       required:
         - images
@@ -902,22 +997,29 @@ components:
       properties:
         images:
           type: array
+          description: |
+            Image metadata ordered from newest to oldest. Clients should use
+            each item's thumbnailUrl when rendering the list.
           items:
             $ref: "#/components/schemas/ImageResponse"
+
         page:
           type: integer
           minimum: 0
           example: 0
+
         size:
           type: integer
           minimum: 1
           maximum: 50
           example: 20
+
         totalElements:
           type: integer
           format: int64
           minimum: 0
           example: 42
+
         totalPages:
           type: integer
           minimum: 0
@@ -931,6 +1033,7 @@ components:
       properties:
         isPublic:
           type: boolean
+          description: New public visibility state for the owned image
           example: true
 
     ShareExpiration:
