@@ -21,6 +21,7 @@ import lombok.extern.slf4j.Slf4j;
 import java.io.ByteArrayInputStream;
 import java.io.InputStream;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Service
@@ -78,26 +79,14 @@ public class ImageService {
         );
         imageTaggingDispatcher.dispatch(savedImage.id());
 
-        return new ImageResponse(
-                savedImage.id(),
-                savedImage.ownerId(),
-                savedImage.originalFilename(),
-                savedImage.contentType(),
-                savedImage.sizeBytes(),
-                savedImage.width(),
-                savedImage.height(),
-                savedImage.isPublic(),
-                savedImage.aiTags(),
-                savedImage.taggingStatus(),
-                savedImage.createdAt()
-        );
+        return toResponse(savedImage);
     }
 
     public ImageContent getImageContent(
-            Long imageId,
+            UUID publicId,
             String requesterEmail
     ) {
-        Image image = imageRepository.findById(imageId)
+        Image image = imageRepository.findByPublicId(publicId)
                 .orElseThrow(ImageNotFoundException::new);
 
         if (!image.isPublic() &&
@@ -137,19 +126,7 @@ public class ImageService {
         List<ImageResponse> images = imageRepository
                 .findAllPublic(size, offset)
                 .stream()
-                .map(image -> new ImageResponse(
-                        image.id(),
-                        image.ownerId(),
-                        image.originalFilename(),
-                        image.contentType(),
-                        image.sizeBytes(),
-                        image.width(),
-                        image.height(),
-                        image.isPublic(),
-                        image.aiTags(),
-                        image.taggingStatus(),
-                        image.createdAt()
-                ))
+                .map(this::toResponse)
                 .toList();
 
         long totalElements =
@@ -170,7 +147,7 @@ public class ImageService {
 
     public ImageResponse updateImageVisibility(
             String ownerEmail,
-            Long imageId,
+            UUID publicId,
             boolean isPublic
     ) {
         User owner = userRepository.findByEmail(ownerEmail)
@@ -180,9 +157,8 @@ public class ImageService {
                         )
                 );
 
-        Image updatedImage = imageRepository
-                .updateVisibility(
-                        imageId,
+        Image updatedImage = imageRepository.updateVisibilityByPublicId(
+                        publicId,
                         owner.id(),
                         isPublic
                 )
@@ -194,26 +170,14 @@ public class ImageService {
                 updatedImage.isPublic()
         );
 
-        return new ImageResponse(
-                updatedImage.id(),
-                updatedImage.ownerId(),
-                updatedImage.originalFilename(),
-                updatedImage.contentType(),
-                updatedImage.sizeBytes(),
-                updatedImage.width(),
-                updatedImage.height(),
-                updatedImage.isPublic(),
-                updatedImage.aiTags(),
-                updatedImage.taggingStatus(),
-                updatedImage.createdAt()
-        );
+        return toResponse(updatedImage);
     }
 
     public ImageResponse getImage(
-            Long imageId,
+            UUID publicId,
             String requesterEmail
     ) {
-        Image image = imageRepository.findById(imageId)
+        Image image = imageRepository.findByPublicId(publicId)
                 .orElseThrow(ImageNotFoundException::new);
 
         if (!image.isPublic() &&
@@ -221,19 +185,7 @@ public class ImageService {
             throw new ImageNotFoundException();
         }
 
-        return new ImageResponse(
-                image.id(),
-                image.ownerId(),
-                image.originalFilename(),
-                image.contentType(),
-                image.sizeBytes(),
-                image.width(),
-                image.height(),
-                image.isPublic(),
-                image.aiTags(),
-                image.taggingStatus(),
-                image.createdAt()
-        );
+        return toResponse(image);
     }
 
     public ImagePageResponse getMyImages(
@@ -257,19 +209,7 @@ public class ImageService {
                         offset
                 )
                 .stream()
-                .map(image -> new ImageResponse(
-                        image.id(),
-                        image.ownerId(),
-                        image.originalFilename(),
-                        image.contentType(),
-                        image.sizeBytes(),
-                        image.width(),
-                        image.height(),
-                        image.isPublic(),
-                        image.aiTags(),
-                        image.taggingStatus(),
-                        image.createdAt()
-                ))
+                .map(this::toResponse)
                 .toList();
 
         long totalElements =
@@ -289,10 +229,10 @@ public class ImageService {
     }
 
     public ImageContent getImageThumbnail(
-            Long imageId,
+            UUID publicId,
             String requesterEmail
     ) {
-        Image image = imageRepository.findById(imageId)
+        Image image = imageRepository.findByPublicId(publicId)
                 .orElseThrow(ImageNotFoundException::new);
 
         if (!image.isPublic() &&
@@ -323,7 +263,7 @@ public class ImageService {
 
     public void deleteImage(
             String ownerEmail,
-            Long imageId
+            UUID publicId
     ) {
         User owner = userRepository.findByEmail(ownerEmail)
                 .orElseThrow(() ->
@@ -332,7 +272,7 @@ public class ImageService {
                         )
                 );
 
-        Image image = imageRepository.findById(imageId)
+        Image image = imageRepository.findByPublicId(publicId)
                 .orElseThrow(ImageNotFoundException::new);
 
         if (!image.ownerId().equals(owner.id())) {
@@ -351,8 +291,8 @@ public class ImageService {
         }
 
         boolean deleted =
-                imageRepository.deleteByIdAndOwnerId(
-                        imageId,
+                imageRepository.deleteByPublicIdAndOwnerId(
+                        publicId,
                         owner.id()
                 );
 
@@ -361,8 +301,27 @@ public class ImageService {
         }
         log.info(
                 "Image deleted imageId={} userId={}",
-                imageId,
+                publicId,
                 owner.id()
+        );
+    }
+    private ImageResponse toResponse(Image image) {
+        String imageUrl =
+                "/api/v1/images/" + image.publicId();
+
+        return new ImageResponse(
+                image.publicId(),
+                image.originalFilename(),
+                image.contentType(),
+                image.sizeBytes(),
+                image.width(),
+                image.height(),
+                image.isPublic(),
+                image.aiTags(),
+                image.taggingStatus(),
+                imageUrl + "/content",
+                imageUrl + "/thumbnail",
+                image.createdAt()
         );
     }
 

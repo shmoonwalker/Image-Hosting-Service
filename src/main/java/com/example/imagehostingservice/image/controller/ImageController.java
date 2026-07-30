@@ -20,6 +20,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 
 import java.nio.charset.StandardCharsets;
+import java.util.UUID;
 
 @RestController
 @RequestMapping("/api/v1/images")
@@ -45,7 +46,7 @@ public class ImageController {
 
     @GetMapping("/{imageId}/content")
     public ResponseEntity<InputStreamResource> getImageContent(
-            @PathVariable Long imageId,
+            @PathVariable UUID imageId,
             Authentication authentication
     ) {
         String requesterEmail = authentication == null
@@ -106,7 +107,7 @@ public class ImageController {
 
     @PatchMapping("/{imageId}")
     public ResponseEntity<ImageResponse> updateImageVisibility(
-            @PathVariable Long imageId,
+            @PathVariable UUID imageId,
             @Valid @RequestBody
             UpdateImageVisibilityRequest request,
             Authentication authentication
@@ -147,7 +148,7 @@ public class ImageController {
 
     @GetMapping("/{imageId}")
     public ResponseEntity<ImageResponse> getImage(
-            @PathVariable Long imageId,
+            @PathVariable UUID imageId,
             Authentication authentication
     ) {
         String requesterEmail = authentication == null
@@ -164,7 +165,7 @@ public class ImageController {
 
     @GetMapping("/{imageId}/thumbnail")
     public ResponseEntity<InputStreamResource> getImageThumbnail(
-            @PathVariable Long imageId,
+            @PathVariable UUID imageId,
             Authentication authentication
     ) {
         String requesterEmail = authentication == null
@@ -209,7 +210,7 @@ public class ImageController {
 
     @DeleteMapping("/{imageId}")
     public ResponseEntity<Void> deleteImage(
-            @PathVariable Long imageId,
+            @PathVariable UUID imageId,
             Authentication authentication
     ) {
         imageService.deleteImage(
