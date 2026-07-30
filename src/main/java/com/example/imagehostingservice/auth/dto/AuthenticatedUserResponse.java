@@ -1,11 +1,12 @@
 package com.example.imagehostingservice.auth.dto;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
 public record AuthenticatedUserResponse(
-        Long id,
+        UUID id,
         String name,
         String email,
-        LocalDateTime createdAt
+        OffsetDateTime createdAt
 ) {
 }

@@ -1,11 +1,13 @@
 package com.example.imagehostingservice.user.model;
 
-import java.time.LocalDateTime;
+import java.time.OffsetDateTime;
+import java.util.UUID;
 
 
 public record User(Long id,
+                   UUID publicId,
                    String name,
                    String email,
                    String passwordHash,
-                   LocalDateTime createdAt) {
+                   OffsetDateTime createdAt) {
 }
