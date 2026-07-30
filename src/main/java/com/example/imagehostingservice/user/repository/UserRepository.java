@@ -83,4 +83,21 @@ public class UserRepository {
                 .stream()
                 .findFirst();
     }
+
+    public boolean updatePasswordHashById(
+            Long userId,
+            String passwordHash
+    ) {
+        String sql = """
+            UPDATE users
+            SET password_hash = ?
+            WHERE id = ?
+            """;
+
+        return jdbcTemplate.update(
+                sql,
+                passwordHash,
+                userId
+        ) == 1;
+    }
 }

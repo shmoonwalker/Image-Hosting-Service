@@ -22,7 +22,7 @@ servers:
 
 tags:
   - name: Authentication
-    description: Registration, login, logout, and session operations
+    description: Registration, login, logout, password reset, and session operations
   - name: Images
     description: Image upload, management, gallery, search, and content
   - name: Sharing
@@ -145,6 +145,60 @@ paths:
                 $ref: "#/components/schemas/CsrfTokenResponse"
         "401":
           $ref: "#/components/responses/Unauthorized"
+
+  /auth/password-reset/request:
+    post:
+      tags:
+        - Authentication
+      summary: Request a password reset
+      description: |
+        Accepts an email address and always returns the same empty response so
+        callers cannot determine whether the address is registered.
+
+        When the address belongs to a user, all older unused reset tokens for
+        that user are invalidated and a new single-use token is created. The
+        token expires after 30 minutes.
+
+        Password reset is currently enabled only outside the `prod` profile.
+        The development implementation writes the reset link to the application
+        log. A production email sender is not implemented yet.
+      operationId: requestPasswordReset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetRequest"
+      responses:
+        "202":
+          description: Request accepted, whether or not the email is registered
+        "400":
+          $ref: "#/components/responses/BadRequest"
+
+  /auth/password-reset/confirm:
+    post:
+      tags:
+        - Authentication
+      summary: Confirm a password reset
+      description: |
+        Replaces the user's password when supplied with a valid, unexpired,
+        unused reset token. A successful reset consumes the token and
+        invalidates all existing sessions for the user. The user must log in
+        again with the new password.
+
+        Password reset is currently enabled only outside the `prod` profile.
+      operationId: confirmPasswordReset
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PasswordResetConfirmRequest"
+      responses:
+        "204":
+          description: Password updated, token consumed, and sessions invalidated
+        "400":
+          $ref: "#/components/responses/InvalidPasswordResetToken"
 
   /images:
     post:
@@ -744,6 +798,40 @@ components:
           writeOnly: true
           example: password123
 
+    PasswordResetRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - email
+      properties:
+        email:
+          type: string
+          format: email
+          maxLength: 255
+          example: shadi@example.com
+
+    PasswordResetConfirmRequest:
+      type: object
+      additionalProperties: false
+      required:
+        - token
+        - newPassword
+      properties:
+        token:
+          type: string
+          minLength: 43
+          maxLength: 128
+          writeOnly: true
+          description: Single-use password-reset token from the reset link
+          example: Q1rBCbOA8J6TTRg2xMuMi4Pq4RQ2EYo3t0O3H7czGOk
+        newPassword:
+          type: string
+          format: password
+          minLength: 8
+          maxLength: 72
+          writeOnly: true
+          example: new-password123
+
     AuthenticatedUserResponse:
       type: object
       additionalProperties: false
@@ -1186,7 +1274,6 @@ components:
         - error
         - message
         - path
-        - requestId
       properties:
         timestamp:
           type: string
@@ -1204,10 +1291,6 @@ components:
         path:
           type: string
           example: /api/v1/images
-        requestId:
-          type: string
-          format: uuid
-          example: 4a97c102-869b-4bb4-a648-d842ff73016d
 
   responses:
     BadRequest:
@@ -1222,7 +1305,6 @@ components:
             error: Bad Request
             message: Request validation failed
             path: /api/v1/images
-            requestId: 4a97c102-869b-4bb4-a648-d842ff73016d
 
     InvalidImage:
       description: Image is missing, empty, corrupt, or otherwise invalid
@@ -1244,6 +1326,19 @@ components:
         application/json:
           schema:
             $ref: "#/components/schemas/ErrorResponse"
+
+    InvalidPasswordResetToken:
+      description: Password-reset token is invalid, expired, or already used
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+          example:
+            timestamp: "2026-07-30T12:00:00"
+            status: 400
+            error: Bad Request
+            message: Password reset token is invalid or expired
+            path: /api/v1/auth/password-reset/confirm
 
     Forbidden:
       description: The request is not allowed or the CSRF token is invalid
