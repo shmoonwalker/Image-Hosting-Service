@@ -11,6 +11,7 @@ import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
 import org.springframework.security.web.context.SecurityContextRepository;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.security.core.Authentication;
@@ -24,12 +25,16 @@ import org.springframework.security.web.authentication.logout.SecurityContextLog
 public class AuthController {
     private final AuthService authService;
     private final SecurityContextRepository securityContextRepository;
+    private final SessionAuthenticationStrategy sessionAuthenticationStrategy;
 
     @PostMapping("/register")
     public ResponseEntity<AuthenticatedUserResponse> register(
-            @Valid @RequestBody RegisterRequest request
+            @Valid @RequestBody RegisterRequest request,
+            HttpServletRequest httpRequest,
+            HttpServletResponse httpResponse
     ) {
         AuthenticatedUserResponse response = authService.register(request);
+        saveSecurityContext(httpRequest, httpResponse);
 
         return ResponseEntity
                 .status(HttpStatus.CREATED)
@@ -41,17 +46,12 @@ public class AuthController {
             @Valid @RequestBody LoginRequest request,
             HttpServletRequest httpRequest,
             HttpServletResponse httpResponse
-    )
-        {
-
+    ) {
         AuthenticatedUserResponse response = authService.login(request);
-            securityContextRepository.saveContext(
-                    SecurityContextHolder.getContext(),
-                    httpRequest,
-                    httpResponse
-            );
-            return ResponseEntity.ok(response);
-        }
+        saveSecurityContext(httpRequest, httpResponse);
+
+        return ResponseEntity.ok(response);
+    }
 
     @GetMapping("/me")
     public ResponseEntity<AuthenticatedUserResponse> getCurrentUser(
@@ -64,6 +64,7 @@ public class AuthController {
 
     @GetMapping("/csrf")
     public CsrfToken csrfToken(CsrfToken csrfToken) {
+
         return csrfToken;
     }
     @PostMapping("/logout")
@@ -92,6 +93,23 @@ public class AuthController {
         );
 
         return ResponseEntity.noContent().build();
+    }
+
+    private void saveSecurityContext(
+            HttpServletRequest request,
+            HttpServletResponse response
+    ) {
+        sessionAuthenticationStrategy.onAuthentication(
+                SecurityContextHolder.getContext().getAuthentication(),
+                request,
+                response
+        );
+
+        securityContextRepository.saveContext(
+                SecurityContextHolder.getContext(),
+                request,
+                response
+        );
     }
 
 }

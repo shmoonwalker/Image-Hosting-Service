@@ -5,16 +5,17 @@ import jakarta.servlet.DispatcherType;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.http.HttpMethod;
-import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.AuthenticationManager;
 import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
-import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.context.HttpSessionSecurityContextRepository;
 import org.springframework.security.web.context.SecurityContextRepository;
+import org.springframework.security.web.authentication.session.ChangeSessionIdAuthenticationStrategy;
+import org.springframework.security.web.authentication.session.SessionAuthenticationStrategy;
+import com.example.imagehostingservice.auth.security.RestAuthenticationEntryPoint;
 
 @Configuration
 public class SecurityConfig {
@@ -22,7 +23,9 @@ public class SecurityConfig {
     @Bean
     public SecurityFilterChain securityFilterChain(
             HttpSecurity http,
-            SecurityContextRepository securityContextRepository
+            SecurityContextRepository securityContextRepository,
+            RestAuthenticationEntryPoint authenticationEntryPoint
+
     ) throws Exception {
         return http
                 .securityContext(securityContext -> securityContext
@@ -86,12 +89,8 @@ public class SecurityConfig {
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions
-                        .authenticationEntryPoint(
-                                new HttpStatusEntryPoint(
-                                        HttpStatus.UNAUTHORIZED
+                                .authenticationEntryPoint(authenticationEntryPoint)
                                 )
-                        )
-                )
                 .formLogin(form -> form.disable())
                 .httpBasic(basic -> basic.disable())
                 .build();
@@ -119,6 +118,11 @@ public class SecurityConfig {
 
     @Bean
     public SecurityContextRepository securityContextRepository() {
+
         return new HttpSessionSecurityContextRepository();
+    }
+    @Bean
+    public SessionAuthenticationStrategy sessionAuthenticationStrategy() {
+        return new ChangeSessionIdAuthenticationStrategy();
     }
 }

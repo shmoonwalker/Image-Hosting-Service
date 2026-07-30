@@ -17,6 +17,8 @@ import org.springframework.security.core.Authentication;
 import org.springframework.security.core.context.SecurityContext;
 import org.springframework.security.core.context.SecurityContextHolder;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DuplicateKeyException;
+import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Locale;
 
@@ -29,6 +31,7 @@ public class AuthService {
     private final UserRepository userRepository;
     private final AuthenticationManager authenticationManager;
 
+    @Transactional
     public AuthenticatedUserResponse register(RegisterRequest request) {
         String email = request.email().trim().toLowerCase(Locale.ROOT);
 
@@ -38,18 +41,27 @@ public class AuthService {
 
         String passwordHash = passwordEncoder.encode(request.password());
 
-        User createdUser = userRepository.save(
-                request.name().trim(),
-                email,
-                passwordHash
-        );
+        User createdUser;
+
+        try {
+            createdUser = userRepository.save(
+                    request.name().trim(),
+                    email,
+                    passwordHash
+            );
+        } catch (DuplicateKeyException exception) {
+            throw new EmailAlreadyExistsException(
+                    "Email is already in use"
+            );
+        }
         log.info(
                 "User registered userId={}",
                 createdUser.id()
         );
+        authenticate(email, request.password());
 
         return new AuthenticatedUserResponse(
-                createdUser.id(),
+                createdUser.publicId(),
                 createdUser.name(),
                 createdUser.email(),
                 createdUser.createdAt()
@@ -59,24 +71,7 @@ public class AuthService {
     public AuthenticatedUserResponse login(LoginRequest request) {
         String email = request.email().trim().toLowerCase(Locale.ROOT);
 
-        Authentication authentication;
-        try {
-            authentication = authenticationManager.authenticate(
-                    UsernamePasswordAuthenticationToken.unauthenticated(
-                            email,
-                            request.password()
-                    )
-            );
-        } catch (AuthenticationException exception) {
-            log.warn("Authentication failed");
-
-            throw new InvalidCredentialsException(
-                    "Invalid email or password"
-            );
-        }
-        SecurityContext securityContext = SecurityContextHolder.createEmptyContext();
-        securityContext.setAuthentication(authentication);
-        SecurityContextHolder.setContext(securityContext);
+        authenticate(email, request.password());
         User user = userRepository.findByEmail(email)
                 .orElseThrow(() -> new InvalidCredentialsException("Invalid email or password")
                 );
@@ -87,7 +82,7 @@ public class AuthService {
 
 
         return new AuthenticatedUserResponse(
-                user.id(),
+                user.publicId(),
                 user.name(),
                 user.email(),
                 user.createdAt()
@@ -98,11 +93,35 @@ public class AuthService {
                 .orElseThrow(() -> new InvalidCredentialsException("User not found"));
 
         return new AuthenticatedUserResponse(
-                user.id(),
+                user.publicId(),
                 user.name(),
                 user.email(),
                 user.createdAt()
         );
+    }
+    private void authenticate(String email, String password) {
+        Authentication authentication;
+
+        try {
+            authentication = authenticationManager.authenticate(
+                    UsernamePasswordAuthenticationToken.unauthenticated(
+                            email,
+                            password
+                    )
+            );
+        } catch (AuthenticationException exception) {
+            log.warn("Authentication failed");
+
+            throw new InvalidCredentialsException(
+                    "Invalid email or password"
+            );
+        }
+
+        SecurityContext securityContext =
+                SecurityContextHolder.createEmptyContext();
+
+        securityContext.setAuthentication(authentication);
+        SecurityContextHolder.setContext(securityContext);
     }
 
 }
