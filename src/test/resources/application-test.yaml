@@ -51,3 +51,13 @@ springdoc:
 
   swagger-ui:
     enabled: false
+
+
+app:
+  frontend:
+    reset-password-url: http://localhost:5173/reset-password
+
+resend:
+  api-key: test-key
+  from-email: "Image Hosting Service <no-reply@example.com>"
+  password-reset-template: password-reset
