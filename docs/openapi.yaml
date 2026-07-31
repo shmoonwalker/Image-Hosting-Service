@@ -160,8 +160,8 @@ paths:
         token expires after 30 minutes.
 
         Password reset is currently enabled only outside the `prod` profile.
-        The development implementation writes the reset link to the application
-        log. A production email sender is not implemented yet.
+        For a registered address, an email containing the reset link is sent
+        through Resend using the configured password-reset template.
       operationId: requestPasswordReset
       requestBody:
         required: true
