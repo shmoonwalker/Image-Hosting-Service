@@ -2,7 +2,7 @@
 
 A secure, AI-powered image-hosting REST API built with Spring Boot.
 
-Users can upload and manage images that are private by default. Images are stored in a private Cloudflare R2 bucket and delivered through authorization-aware API endpoints. Gemini analyzes uploaded images asynchronously to generate searchable objects, descriptive tags, and prominent colors.
+Users can upload and manage images that are private by default. Images are stored in a private Cloudflare R2 bucket and delivered through authorization-aware API endpoints. RabbitMQ queues background Gemini analysis that generates searchable objects, descriptive tags, and prominent colors.
 
 ## Features
 
@@ -13,7 +13,8 @@ Users can upload and manage images that are private by default. Images are store
 - Public/private visibility management
 - Personal image library with pagination
 - Public gallery using 100 × 100 thumbnails
-- Asynchronous Gemini image analysis
+- RabbitMQ-backed Gemini image analysis
+- Bounded tagging retries and dead-letter handling
 - AI-processing status tracking
 - Search through AI-generated objects, tags, and colors
 - Expiring and revocable private sharing links
@@ -32,6 +33,7 @@ Users can upload and manage images that are private by default. Images are store
 - Spring JDBC
 - Spring Boot Actuator
 - PostgreSQL
+- RabbitMQ
 - Flyway
 - Cloudflare R2
 - Google Gemini
@@ -41,6 +43,7 @@ Users can upload and manage images that are private by default. Images are store
 - Grafana Cloud Loki
 - Maven
 - Docker
+- Docker Compose
 - Railway
 - GitHub Actions
 - GitHub Container Registry
@@ -62,10 +65,19 @@ API client
 Spring Boot API
     |-- PostgreSQL: users, sessions, image metadata, and AI tags
     |-- Cloudflare R2: original images and thumbnails
-    `-- Gemini: asynchronous image analysis
+    `-- RabbitMQ: durable image-tagging jobs
+            |
+            v
+        Gemini: image analysis
 ```
 
 PostgreSQL uses numeric internal identifiers for database relationships. Public API resources use UUIDs so internal database identifiers are not exposed.
+
+### Image-tagging flow
+
+After an image is stored, the API publishes its internal database ID to a durable RabbitMQ queue. A Spring listener consumes the message and calls the existing image-tagging processor, which downloads the image from Cloudflare R2, sends it to Gemini, and stores the generated tags in PostgreSQL.
+
+Tagging uses three total processing attempts with backoff between attempts. When all attempts fail, the image is marked `FAILED` and the rejected message is routed to `image.tagging.failed.queue`. Successful messages are acknowledged and removed from the main queue.
 
 ## Configuration
 
@@ -76,6 +88,10 @@ Configuration is supplied through environment variables. Secrets must never be c
 | `DB_URL` | PostgreSQL JDBC URL |
 | `DB_USER` | PostgreSQL username |
 | `DB_PASSWORD` | PostgreSQL password |
+| `RABBITMQ_HOST` | RabbitMQ host, defaults to `localhost` during development |
+| `RABBITMQ_PORT` | RabbitMQ AMQP port, defaults to `5672` |
+| `RABBITMQ_USER` | RabbitMQ username |
+| `RABBITMQ_PASSWORD` | RabbitMQ password |
 | `OBJECT_STORAGE_ENDPOINT` | Cloudflare R2 S3 endpoint |
 | `OBJECT_STORAGE_REGION` | Object-storage region |
 | `OBJECT_STORAGE_ACCESS_KEY_ID` | Cloudflare R2 access key |
@@ -83,6 +99,54 @@ Configuration is supplied through environment variables. Secrets must never be c
 | `OBJECT_STORAGE_BUCKET` | Private Cloudflare R2 bucket |
 | `GEMINI_API_KEY` | Google Gemini API key |
 | `PORT` | HTTP port, defaults to `8080` |
+
+## Local infrastructure
+
+Docker Compose runs development-only PostgreSQL and RabbitMQ containers. It is not used for Railway deployment.
+
+Create the local environment file from the committed example and replace the placeholder passwords:
+
+```bash
+cp .env.example .env
+```
+
+Start the containers:
+
+```bash
+docker compose up -d
+```
+
+Check their health:
+
+```bash
+docker compose ps
+```
+
+Local service addresses:
+
+```text
+Docker PostgreSQL:    localhost:5433
+RabbitMQ AMQP:        localhost:5672
+RabbitMQ dashboard:   http://localhost:15672
+```
+
+When running Spring Boot outside Docker, configure it to use the Docker PostgreSQL instance with:
+
+```text
+DB_URL=jdbc:postgresql://localhost:5433/image_hosting
+DB_USER=image_hosting
+DB_PASSWORD=<value from .env>
+RABBITMQ_USER=image_hosting
+RABBITMQ_PASSWORD=<value from .env>
+```
+
+Stop the local containers with:
+
+```bash
+docker compose down
+```
+
+Named volumes preserve PostgreSQL and RabbitMQ data across normal container restarts. Running `docker compose down -v` also deletes those volumes and their stored development data.
 
 ### Observability configuration
 

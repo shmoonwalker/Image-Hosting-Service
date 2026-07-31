@@ -8,6 +8,11 @@ spring:
     username: ${DB_USER:test}
     password: ${DB_PASSWORD:test}
 
+  rabbitmq:
+    listener:
+      simple:
+        auto-startup: false
+
   session:
     jdbc:
       initialize-schema: always
