@@ -90,6 +90,11 @@ public class SecurityConfig {
                                 "/api/v1/images/*/thumbnail"
                         ).permitAll()
 
+                        .requestMatchers(
+                                HttpMethod.GET,
+                                "/api/v1/shares/**"
+                        ).permitAll()
+
                         .anyRequest().authenticated()
                 )
                 .exceptionHandling(exceptions -> exceptions
