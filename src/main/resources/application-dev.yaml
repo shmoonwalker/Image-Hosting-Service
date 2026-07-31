@@ -39,7 +39,6 @@ springdoc:
     enabled: true
     path: /swagger-ui.html
 
-
 app:
   frontend:
     reset-password-url: ${RESET_PASSWORD_URL:http://localhost:5173/reset-password}
