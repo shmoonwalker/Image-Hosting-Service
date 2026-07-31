@@ -21,7 +21,7 @@ public class ImageTaggingRepository {
                 SET tagging_status = 'PROCESSING',
                     updated_at = now()
                 WHERE id = ?
-                  AND tagging_status = 'PENDING'
+                  AND tagging_status IN ('PENDING', 'PROCESSING')
                 """;
 
         return jdbcTemplate.update(sql, imageId) == 1;

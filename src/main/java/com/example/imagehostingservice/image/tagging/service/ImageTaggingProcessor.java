@@ -73,15 +73,13 @@ public class ImageTaggingProcessor {
                     imageId
             );
         } catch (RuntimeException exception) {
-            boolean markedFailed =
-                    taggingRepository.markFailed(imageId);
-
-            log.error(
-                    "Image tagging failed imageId={} markedFailed={}",
+            log.warn(
+                    "Image tagging attempt failed imageId={}",
                     imageId,
-                    markedFailed,
                     exception
             );
+
+            throw exception;
         }
     }
 }
