@@ -15,7 +15,6 @@ import org.springframework.session.FindByIndexNameSessionRepository;
 import org.springframework.session.Session;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
-import org.springframework.context.annotation.Profile;
 import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
 import java.security.NoSuchAlgorithmException;
@@ -31,7 +30,6 @@ import java.util.Map;
 @Slf4j
 @Service
 @RequiredArgsConstructor
-@Profile("!prod")
 public class PasswordResetService {
 
     private static final Duration TOKEN_VALIDITY =

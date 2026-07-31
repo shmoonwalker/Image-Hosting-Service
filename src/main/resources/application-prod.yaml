@@ -50,6 +50,15 @@ gemini:
   api-key: ${GEMINI_API_KEY}
   model: ${GEMINI_MODEL:gemini-3.5-flash-lite}
 
+app:
+  frontend:
+    reset-password-url: ${RESET_PASSWORD_URL}
+
+resend:
+  api-key: ${RESEND_API_KEY}
+  from-email: ${RESEND_FROM_EMAIL}
+  password-reset-template: ${RESEND_PASSWORD_RESET_TEMPLATE}
+
 logging:
   level:
     root: INFO
