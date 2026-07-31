@@ -3,17 +3,27 @@ package com.example.imagehostingservice.image.validation;
 import com.example.imagehostingservice.exception.InvalidImageException;
 import org.springframework.stereotype.Component;
 import org.springframework.web.multipart.MultipartFile;
-import java.awt.image.BufferedImage;
-import java.util.Set;
+
 import javax.imageio.ImageIO;
+import javax.imageio.ImageReader;
+import javax.imageio.stream.ImageInputStream;
+import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.io.InputStream;
+import java.util.Iterator;
+import java.util.Set;
 
 @Component
 public class ImageFileValidator {
 
     private static final long MAXIMUM_FILE_SIZE =
             10L * 1024 * 1024;
+
+    private static final int MAXIMUM_WIDTH = 10_000;
+
+    private static final int MAXIMUM_HEIGHT = 10_000;
+
+    private static final long MAXIMUM_PIXELS = 25_000_000L;
 
     private static final Set<String> ALLOWED_CONTENT_TYPES =
             Set.of(
@@ -47,14 +57,14 @@ public class ImageFileValidator {
         String originalFilename =
                 sanitizeFilename(file.getOriginalFilename());
 
-        BufferedImage image = readImage(file);
+        ImageDimensions dimensions = inspectImage(file);
 
         return new ValidatedImage(
                 originalFilename,
                 contentType,
                 file.getSize(),
-                image.getWidth(),
-                image.getHeight()
+                dimensions.width(),
+                dimensions.height()
         );
     }
 
@@ -91,24 +101,82 @@ public class ImageFileValidator {
         return sanitizedFilename;
     }
 
-    private BufferedImage readImage(MultipartFile file) {
-        BufferedImage image;
+    private ImageDimensions inspectImage(MultipartFile file) {
+        try (
+                InputStream inputStream = file.getInputStream();
+                ImageInputStream imageInputStream =
+                        ImageIO.createImageInputStream(inputStream)
+        ) {
+            if (imageInputStream == null) {
+                throw invalidImage();
+            }
 
-        try (InputStream inputStream = file.getInputStream()) {
-            image = ImageIO.read(inputStream);
+            Iterator<ImageReader> readers =
+                    ImageIO.getImageReaders(imageInputStream);
+
+            if (!readers.hasNext()) {
+                throw invalidImage();
+            }
+
+            ImageReader reader = readers.next();
+
+            try {
+                reader.setInput(imageInputStream, false, true);
+
+                int width = reader.getWidth(0);
+                int height = reader.getHeight(0);
+
+                validateDimensions(width, height);
+
+                BufferedImage image = reader.read(0);
+
+                if (image == null) {
+                    throw invalidImage();
+                }
+
+                validateDimensions(
+                        image.getWidth(),
+                        image.getHeight()
+                );
+
+                return new ImageDimensions(
+                        image.getWidth(),
+                        image.getHeight()
+                );
+            } finally {
+                reader.dispose();
+            }
         } catch (IOException exception) {
             throw new InvalidImageException(
                     "Could not read the uploaded image",
                     exception
             );
         }
+    }
 
-        if (image == null) {
+    private void validateDimensions(int width, int height) {
+        long pixelCount = (long) width * height;
+
+        if (width <= 0 ||
+                height <= 0 ||
+                width > MAXIMUM_WIDTH ||
+                height > MAXIMUM_HEIGHT ||
+                pixelCount > MAXIMUM_PIXELS) {
             throw new InvalidImageException(
-                    "The uploaded file is not a valid image"
+                    "Image dimensions are too large"
             );
         }
+    }
 
-        return image;
+    private InvalidImageException invalidImage() {
+        return new InvalidImageException(
+                "The uploaded file is not a valid image"
+        );
+    }
+
+    private record ImageDimensions(
+            int width,
+            int height
+    ) {
     }
 }
