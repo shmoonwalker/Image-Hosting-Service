@@ -5,6 +5,7 @@ The database uses numeric IDs internally and UUIDs for resources exposed through
 ```mermaid
 erDiagram
     USERS ||--o{ IMAGES : owns
+    USERS ||--o{ PASSWORD_RESET_TOKENS : receives
     IMAGES ||--o{ IMAGE_SHARE_LINKS : has
 
     USERS {
@@ -36,6 +37,15 @@ erDiagram
         TEXT tagging_error
         TIMESTAMPTZ created_at
         TIMESTAMPTZ updated_at
+    }
+
+    PASSWORD_RESET_TOKENS {
+        BIGINT id PK
+        BIGINT user_id FK
+        CHAR token_hash UK
+        TIMESTAMPTZ expires_at
+        TIMESTAMPTZ used_at
+        TIMESTAMPTZ created_at
     }
 
     IMAGE_SHARE_LINKS {

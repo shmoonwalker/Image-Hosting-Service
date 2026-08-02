@@ -15,6 +15,7 @@ Users can upload and manage images that are private by default. Images are store
 - Public gallery using 100 × 100 thumbnails
 - RabbitMQ-backed Gemini image analysis
 - Bounded tagging retries and dead-letter handling
+- RabbitMQ publisher confirmations and unroutable-message detection
 - AI-processing status tracking
 - Search through AI-generated objects, tags, and colors
 - Expiring and revocable private sharing links
@@ -77,7 +78,9 @@ PostgreSQL uses numeric internal identifiers for database relationships. Public 
 
 After an image is stored, the API publishes its internal database ID to a durable RabbitMQ queue. A Spring listener consumes the message and calls the existing image-tagging processor, which downloads the image from Cloudflare R2, sends it to Gemini, and stores the generated tags in PostgreSQL.
 
-Tagging uses three total processing attempts with backoff between attempts. When all attempts fail, the image is marked `FAILED` and the rejected message is routed to `image.tagging.failed.queue`. Successful messages are acknowledged and removed from the main queue.
+Before reporting a dispatch as successful, the API waits briefly for RabbitMQ to confirm that the tagging message was accepted and routed to the tagging queue. A rejected, unroutable, or unconfirmed message causes the image-tagging status to be marked `FAILED`.
+
+Tagging uses two total processing attempts with backoff between attempts. When both attempts fail, the image is marked `FAILED` and the rejected message is routed to `image.tagging.failed.queue`. Successful messages are acknowledged and removed from the main queue.
 
 ## Configuration
 
@@ -98,17 +101,25 @@ Configuration is supplied through environment variables. Secrets must never be c
 | `OBJECT_STORAGE_SECRET_ACCESS_KEY` | Cloudflare R2 secret key |
 | `OBJECT_STORAGE_BUCKET` | Private Cloudflare R2 bucket |
 | `GEMINI_API_KEY` | Google Gemini API key |
+| `GEMINI_MODEL` | Gemini model, defaults to `gemini-3.5-flash-lite` |
+| `RESET_PASSWORD_URL` | Frontend URL used to create password-reset links |
+| `RESEND_API_KEY` | Resend API key |
+| `RESEND_FROM_EMAIL` | Verified sender used for password-reset emails |
+| `RESEND_PASSWORD_RESET_TEMPLATE` | Published Resend password-reset template identifier |
+| `SESSION_TIMEOUT` | Production session timeout, defaults to `30m` |
 | `PORT` | HTTP port, defaults to `8080` |
 
 ## Local infrastructure
 
 Docker Compose runs development-only PostgreSQL and RabbitMQ containers. It is not used for Railway deployment.
 
-Create the local environment file from the committed example and replace the placeholder passwords:
+Create the local Docker Compose environment file from the committed example and replace the placeholder passwords:
 
 ```bash
 cp .env.example .env
 ```
+
+This `.env` file configures only the local PostgreSQL and RabbitMQ containers. Spring Boot does not automatically load it as the complete application configuration. Supply the application variables from the configuration table through your IDE, shell, or deployment platform.
 
 Start the containers:
 
@@ -208,13 +219,15 @@ The complete API contract is available in the [OpenAPI specification](docs/opena
 
 ## Swagger
 
-When the application is running:
+When the application is running with the `dev` profile:
 
 ```text
 Swagger UI:   http://localhost:8080/swagger-ui.html
 OpenAPI JSON: http://localhost:8080/v3/api-docs
 OpenAPI YAML: http://localhost:8080/v3/api-docs.yaml
 ```
+
+Swagger UI and the generated OpenAPI endpoints are disabled with the `prod` profile. The committed [OpenAPI specification](docs/openapi.yaml) remains available as the production API contract.
 
 Authentication uses an opaque `SESSION` cookie. Authenticated state-changing operations also require CSRF protection.
 
@@ -361,12 +374,22 @@ docker run --rm -p 8080:8080 \
   -e DB_URL \
   -e DB_USER \
   -e DB_PASSWORD \
+  -e RABBITMQ_HOST \
+  -e RABBITMQ_PORT \
+  -e RABBITMQ_USER \
+  -e RABBITMQ_PASSWORD \
   -e OBJECT_STORAGE_ENDPOINT \
   -e OBJECT_STORAGE_REGION \
   -e OBJECT_STORAGE_ACCESS_KEY_ID \
   -e OBJECT_STORAGE_SECRET_ACCESS_KEY \
   -e OBJECT_STORAGE_BUCKET \
   -e GEMINI_API_KEY \
+  -e GEMINI_MODEL \
+  -e RESET_PASSWORD_URL \
+  -e RESEND_API_KEY \
+  -e RESEND_FROM_EMAIL \
+  -e RESEND_PASSWORD_RESET_TEMPLATE \
+  -e SESSION_TIMEOUT \
   image-hosting-service
 ```
 
@@ -379,12 +402,22 @@ docker run --rm -p 8080:8080 \
   -e DB_URL \
   -e DB_USER \
   -e DB_PASSWORD \
+  -e RABBITMQ_HOST \
+  -e RABBITMQ_PORT \
+  -e RABBITMQ_USER \
+  -e RABBITMQ_PASSWORD \
   -e OBJECT_STORAGE_ENDPOINT \
   -e OBJECT_STORAGE_REGION \
   -e OBJECT_STORAGE_ACCESS_KEY_ID \
   -e OBJECT_STORAGE_SECRET_ACCESS_KEY \
   -e OBJECT_STORAGE_BUCKET \
   -e GEMINI_API_KEY \
+  -e GEMINI_MODEL \
+  -e RESET_PASSWORD_URL \
+  -e RESEND_API_KEY \
+  -e RESEND_FROM_EMAIL \
+  -e RESEND_PASSWORD_RESET_TEMPLATE \
+  -e SESSION_TIMEOUT \
   -e LOKI_URL \
   -e LOKI_USERNAME \
   -e LOKI_API_TOKEN \

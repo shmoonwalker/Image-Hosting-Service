@@ -159,7 +159,6 @@ paths:
         that user are invalidated and a new single-use token is created. The
         token expires after 30 minutes.
 
-        Password reset is currently enabled only outside the `prod` profile.
         For a registered address, an email containing the reset link is sent
         through Resend using the configured password-reset template.
       operationId: requestPasswordReset
@@ -185,8 +184,6 @@ paths:
         unused reset token. A successful reset consumes the token and
         invalidates all existing sessions for the user. The user must log in
         again with the new password.
-
-        Password reset is currently enabled only outside the `prod` profile.
       operationId: confirmPasswordReset
       requestBody:
         required: true
