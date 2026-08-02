@@ -156,7 +156,8 @@ public class ImageService {
             objectStorageService.delete(storageKey);
         } catch (RuntimeException cleanupException) {
             log.error(
-                    "Could not clean up uploaded {} object storageKey={}",
+                    "Could not delete image storage object "
+                            + "type={} storageKey={}",
                     objectType,
                     storageKey,
                     cleanupException
@@ -395,17 +396,6 @@ public class ImageService {
             throw new ImageNotFoundException();
         }
 
-        objectStorageService.delete(
-                image.originalStorageKey()
-        );
-
-        if (image.thumbnailStorageKey() != null &&
-                !image.thumbnailStorageKey().isBlank()) {
-            objectStorageService.delete(
-                    image.thumbnailStorageKey()
-            );
-        }
-
         boolean deleted =
                 imageRepository.deleteByPublicIdAndOwnerId(
                         publicId,
@@ -415,6 +405,16 @@ public class ImageService {
         if (!deleted) {
             throw new ImageNotFoundException();
         }
+
+        deleteStorageObjectQuietly(
+                image.originalStorageKey(),
+                "original"
+        );
+        deleteStorageObjectQuietly(
+                image.thumbnailStorageKey(),
+                "thumbnail"
+        );
+
         log.info(
                 "Image deleted imageId={} userId={}",
                 publicId,
