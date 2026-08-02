@@ -61,6 +61,18 @@ public class ImageTaggingRepository {
         return jdbcTemplate.update(sql, imageId) == 1;
     }
 
+    public boolean markPendingFailed(Long imageId) {
+        String sql = """
+                UPDATE images
+                SET tagging_status = 'FAILED',
+                    updated_at = now()
+                WHERE id = ?
+                  AND tagging_status = 'PENDING'
+                """;
+
+        return jdbcTemplate.update(sql, imageId) == 1;
+    }
+
     private String serialize(ImageTags imageTags) {
         try {
             return objectMapper.writeValueAsString(imageTags);
