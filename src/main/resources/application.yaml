@@ -5,6 +5,12 @@ spring:
   lifecycle:
     timeout-per-shutdown-phase: 20s
 
+  rabbitmq:
+    publisher-confirm-type: correlated
+    publisher-returns: true
+    template:
+      mandatory: true
+
   servlet:
     multipart:
       max-file-size: 10MB

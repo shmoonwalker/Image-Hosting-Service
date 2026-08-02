@@ -8,6 +8,7 @@ import com.example.imagehostingservice.image.model.Image;
 import com.example.imagehostingservice.image.model.TaggingStatus;
 import com.example.imagehostingservice.image.repository.ImageRepository;
 import com.example.imagehostingservice.image.tagging.dispatch.ImageTaggingDispatcher;
+import com.example.imagehostingservice.image.tagging.repository.ImageTaggingRepository;
 import com.example.imagehostingservice.image.thumbnail.ThumbnailGenerator;
 import com.example.imagehostingservice.storage.service.ObjectStorageService;
 import com.example.imagehostingservice.user.model.User;
@@ -35,6 +36,7 @@ public class ImageService {
     private final ImageRepository imageRepository;
     private final ThumbnailGenerator thumbnailGenerator;
     private final ImageTaggingDispatcher imageTaggingDispatcher;
+    private final ImageTaggingRepository imageTaggingRepository;
 
     public ImageResponse uploadImage(
             String ownerEmail,
@@ -52,25 +54,43 @@ public class ImageService {
         byte[] thumbnailBytes =
                 thumbnailGenerator.generate(file);
 
-        String originalStorageKey =
-                objectStorageService.upload(file);
+        String originalStorageKey = null;
+        String thumbnailStorageKey = null;
+        Image savedImage;
 
-        String thumbnailStorageKey =
-                objectStorageService.upload(
-                        thumbnailBytes,
-                        "image/png"
-                );
+        try {
+            originalStorageKey =
+                    objectStorageService.upload(file);
 
-        Image savedImage = imageRepository.save(
-                owner.id(),
-                validatedImage.originalFilename(),
-                originalStorageKey,
-                thumbnailStorageKey,
-                validatedImage.contentType(),
-                validatedImage.sizeBytes(),
-                validatedImage.width(),
-                validatedImage.height()
-        );
+            thumbnailStorageKey =
+                    objectStorageService.upload(
+                            thumbnailBytes,
+                            "image/png"
+                    );
+
+            savedImage = imageRepository.save(
+                    owner.id(),
+                    validatedImage.originalFilename(),
+                    originalStorageKey,
+                    thumbnailStorageKey,
+                    validatedImage.contentType(),
+                    validatedImage.sizeBytes(),
+                    validatedImage.width(),
+                    validatedImage.height()
+            );
+        } catch (RuntimeException exception) {
+            deleteStorageObjectQuietly(
+                    thumbnailStorageKey,
+                    "thumbnail"
+            );
+            deleteStorageObjectQuietly(
+                    originalStorageKey,
+                    "original"
+            );
+
+            throw exception;
+        }
+
         log.info(
                 "Image uploaded imageId={} userId={} contentType={} sizeBytes={}",
                 savedImage.id(),
@@ -78,9 +98,71 @@ public class ImageService {
                 savedImage.contentType(),
                 savedImage.sizeBytes()
         );
-        imageTaggingDispatcher.dispatch(savedImage.id());
 
-        return toResponse(savedImage);
+        Image responseImage = dispatchTagging(savedImage);
+
+        return toResponse(responseImage);
+    }
+
+    private Image dispatchTagging(Image savedImage) {
+        try {
+            imageTaggingDispatcher.dispatch(savedImage.id());
+            return savedImage;
+        } catch (RuntimeException dispatchException) {
+            log.error(
+                    "Could not dispatch image tagging imageId={}",
+                    savedImage.id(),
+                    dispatchException
+            );
+
+            try {
+                boolean markedFailed =
+                        imageTaggingRepository.markPendingFailed(
+                                savedImage.id()
+                        );
+
+                if (!markedFailed) {
+                    log.warn(
+                            "Could not mark pending image tagging as failed "
+                                    + "imageId={}",
+                            savedImage.id()
+                    );
+                    return savedImage;
+                }
+
+                return imageRepository.findById(savedImage.id())
+                        .orElse(savedImage);
+            } catch (RuntimeException statusException) {
+                log.error(
+                        "Could not update tagging status after dispatch failure "
+                                + "imageId={}",
+                        savedImage.id(),
+                        statusException
+                );
+                return savedImage;
+            }
+        }
+    }
+
+    private void deleteStorageObjectQuietly(
+            String storageKey,
+            String objectType
+    ) {
+        if (storageKey == null || storageKey.isBlank()) {
+            return;
+        }
+
+        try {
+            objectStorageService.delete(storageKey);
+        } catch (RuntimeException cleanupException) {
+            log.error(
+                    "Could not delete image storage object "
+                            + "type={} storageKey={}",
+                    objectType,
+                    storageKey,
+                    cleanupException
+            );
+        }
     }
 
     public ImageContent getImageContent(
@@ -314,17 +396,6 @@ public class ImageService {
             throw new ImageNotFoundException();
         }
 
-        objectStorageService.delete(
-                image.originalStorageKey()
-        );
-
-        if (image.thumbnailStorageKey() != null &&
-                !image.thumbnailStorageKey().isBlank()) {
-            objectStorageService.delete(
-                    image.thumbnailStorageKey()
-            );
-        }
-
         boolean deleted =
                 imageRepository.deleteByPublicIdAndOwnerId(
                         publicId,
@@ -334,6 +405,16 @@ public class ImageService {
         if (!deleted) {
             throw new ImageNotFoundException();
         }
+
+        deleteStorageObjectQuietly(
+                image.originalStorageKey(),
+                "original"
+        );
+        deleteStorageObjectQuietly(
+                image.thumbnailStorageKey(),
+                "thumbnail"
+        );
+
         log.info(
                 "Image deleted imageId={} userId={}",
                 publicId,
