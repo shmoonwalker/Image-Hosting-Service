@@ -14,6 +14,22 @@ spring:
       connection-timeout: 30000
       validation-timeout: 5000
 
+  rabbitmq:
+    host: ${RABBITMQ_HOST}
+    port: ${RABBITMQ_PORT:5672}
+    username: ${RABBITMQ_USER}
+    password: ${RABBITMQ_PASSWORD}
+
+    listener:
+      simple:
+        default-requeue-rejected: false
+        retry:
+          enabled: true
+          max-attempts: 2
+          initial-interval: 2s
+          multiplier: 2.0
+          max-interval: 10s
+
   session:
     jdbc:
       initialize-schema: always
