@@ -19,10 +19,10 @@ spring:
         default-requeue-rejected: false
         retry:
           enabled: true
-          max-attempts: 2
           initial-interval: 2s
           multiplier: 2.0
           max-interval: 10s
+          max-retries: 2
 
   session:
     jdbc:
@@ -57,9 +57,9 @@ springdoc:
 
 app:
   frontend:
-    reset-password-url: ${RESET_PASSWORD_URL:http://localhost:5173/reset-password}
+    reset-password-url: ${RESET_PASSWORD_URL}
 
 resend:
   api-key: ${RESEND_API_KEY}
-  from-email: "${RESEND_FROM_EMAIL:Image Hosting Service <no-reply@paiksa.com>}"
+  from-email: "${RESEND_FROM_EMAIL:Image Hosting Service <no-reply@shadibuilds.dev}"
   password-reset-template: ${RESEND_PASSWORD_RESET_TEMPLATE:password-reset}
