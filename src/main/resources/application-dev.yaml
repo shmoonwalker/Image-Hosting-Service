@@ -61,5 +61,5 @@ app:
 
 resend:
   api-key: ${RESEND_API_KEY}
-  from-email: "${RESEND_FROM_EMAIL:Image Hosting Service <no-reply@shadibuilds.dev}"
+  from-email: "${RESEND_FROM_EMAIL:Image Hosting Service <no-reply@shadibuilds.dev>}"
   password-reset-template: ${RESEND_PASSWORD_RESET_TEMPLATE:password-reset}
